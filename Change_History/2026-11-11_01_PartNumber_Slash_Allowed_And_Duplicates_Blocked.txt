@@ -1,0 +1,650 @@
+CHANGE RECORD 01 - Part number: allow slash in parts list + block duplicate parts
+==============================================================================
+Record:      01
+Date:        2026-11-11
+Made by:     Nofil (with Claude Code)
+Type:        Bug fix + user feedback (same validation rule)
+Status:      PENDING TEST - not yet tested in dev.
+Based on:    iQuery_Dev_11_Nov_20261112011618.zip (app last saved 2026-11-04 03:22 UTC)
+             No earlier records.
+
+WHY
+------------------------------------------------------------------------------
+Allowed in a part number: letters, numbers, hyphen (-), slash (/), period (.).
+Not allowed: cage codes (':' - and in the parts list also ',' or a space inside one
+part number), other special characters, and the same part number twice in one
+request (exact match, upper/lower case ignored; 'ABC' vs 'ABC-1' is NOT a duplicate).
+
+Cause: the New Request box allows '/', but the Manage parts list popup checked
+IsMatch(PartNumber, "[ ,/:]", Contains) and called a '/' a cage code. 'Create New
+Request' -> Button7 builds the list without that check, so the error only showed
+once the user typed a description, and then Save was blocked
+('One or more Part Details contain errors'). Nothing checked for duplicates, and
+Save creates one iQuery per row.
+
+IMPACT / RISK
+------------------------------------------------------------------------------
+Changed: 7 properties on PartsQuerySystem (no new controls/variables, no renames).
+Changes 6 and 7 are display text only.
+Not changed: save logic (btnSaveClose / Form1 / HiddenSaveButton), colCreateQueue,
+App.OnStart, data sources, flows, existing-query editing (the parts list popup is
+only shown for new requests). Everything that reacts to a part error (yellow
+border, red message, popup Save button, main Save check, warning icon) already
+reads the 'error' field, so it works unchanged.
+Behaviour differences: a tab or line break inside one part number in the popup is
+now flagged; a part not in the master list shows '❗ Part Description cannot be
+blank' instead of '⚠️ Please enter Part Description' after 'Add to list'.
+
+THE CHANGE
+------------------------------------------------------------------------------
+Note: the parts list popup is hidden while editing in Studio. Clicking its controls
+in the Tree view still opens their formulas.
+
+==================== CHANGE 1 ====================
+STEP 1: Screen: PartsQuerySystem (New Request popup (first screen))
+STEP 2: Tree view: PartsQuerySystem > Body Container > SearchModal > cntSearchModal > lbl_ErrorMessage_GlobalPN
+STEP 3: Property dropdown: Text
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Adds a duplicate part number check (upper/lower case ignored); a lone line break (CR) now separates parts instead of joining them. Cage code and character checks unchanged. This label already disables 'Create New Request' when it shows a message.
+---------------------------- BEFORE - CHANGE 1 ----------------------------
+If(
+    CountRows(
+        Filter(
+            Filter(
+                Split(
+                    Substitute(
+                        PartNumberTextInput.Text,
+                        Char(10),
+                        " "
+                    ),
+                    " "
+                ),
+                !IsBlank(Value)
+            ),
+            ":" in Value
+        )
+    ) > 0,
+    "⚠️ Part number must not contain cage code",
+    If(
+        !IsBlank(PartNumberTextInput.Text) && !IsMatch(
+            PartNumberTextInput.Text,
+            "^[A-Za-z0-9\-\/\.\r\n\s]*$"
+        ),
+        "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+        Blank()
+    )
+)
+---------------------------- AFTER - CHANGE 1 -----------------------------
+With(
+    {
+        _parts: ForAll(
+            Filter(
+                Split(
+                    Substitute(
+                        Substitute(PartNumberTextInput.Text, Char(13), " "),
+                        Char(10),
+                        " "
+                    ),
+                    " "
+                ),
+                !IsBlank(Trim(Value))
+            ),
+            {Value: Trim(Value)}
+        )
+    },
+    With(
+        {
+            _duplicate: First(
+                Filter(
+                    _parts As p,
+                    CountRows(Filter(_parts, Lower(Value) = Lower(p.Value))) > 1
+                )
+            ).Value
+        },
+        If(
+            CountRows(Filter(_parts, ":" in Value)) > 0,
+            "⚠️ Part number must not contain cage code",
+            !IsBlank(PartNumberTextInput.Text) && !IsMatch(
+                PartNumberTextInput.Text,
+                "^[A-Za-z0-9\-\/\.\r\n\s]*$"
+            ),
+            "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+            !IsBlank(_duplicate),
+            "⚠️ Duplicate part number: " & _duplicate & ". Please enter each part number only once.",
+            Blank()
+        )
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 2 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - Part Number box)
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Gallery9 > Container29 > TextInput4
+STEP 3: Property dropdown: OnChange
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Slash is no longer treated as a cage code; duplicate check added; all rows are re-checked so both copies of a duplicate are flagged/cleared together.
+---------------------------- BEFORE - CHANGE 2 ----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID,
+        _partNumber: Self.Text,
+        _partDescription: LookUp(
+            'Weekly SIO Part Master - Currents',
+            'Part Number' = TextInput4.Text
+        ).'PART DESCRIPTION'
+    },
+    Patch(
+        colOpenTabs,
+        _tab,
+        {
+            colPartsDetail:
+                ForAll(
+                    _tab.colPartsDetail As p,
+                    If(
+                        p.LocalID = _id,
+                        {
+                            LocalID: p.LocalID,
+                            PartNumber: _partNumber,
+                            PartDescription: _partDescription,
+                            error:
+                                If(IsBlank(_partNumber), "❗Part Number cannot be blank",
+                                
+                                If(IsMatch(_partNumber, "[ ,/:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+
+                                If(!IsBlank(_partNumber) && !IsMatch(_partNumber,"^[A-Za-z0-9\-\/\.\r\n\s]*$"), "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+                   
+                                If(IsBlank(_partDescription), "❗ Part Description cannot be blank", Blank()))))
+                        },
+                        {
+                            LocalID: p.LocalID,
+                            PartNumber: p.PartNumber,
+                            PartDescription: p.PartDescription,
+                            error: p.error
+                        }
+                    )
+                )
+        }
+    )
+)
+---------------------------- AFTER - CHANGE 2 -----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID,
+        _partNumber: Self.Text,
+        _partDescription: LookUp(
+            'Weekly SIO Part Master - Currents',
+            'Part Number' = TextInput4.Text
+        ).'PART DESCRIPTION'
+    },
+    With(
+        {
+            _rows: ForAll(
+                _tab.colPartsDetail As p,
+                If(
+                    p.LocalID = _id,
+                    {
+                        LocalID: p.LocalID,
+                        PartNumber: _partNumber,
+                        PartDescription: _partDescription
+                    },
+                    {
+                        LocalID: p.LocalID,
+                        PartNumber: p.PartNumber,
+                        PartDescription: p.PartDescription
+                    }
+                )
+            )
+        },
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                colPartsDetail:
+                    ForAll(
+                        _rows As r,
+                        {
+                            LocalID: r.LocalID,
+                            PartNumber: r.PartNumber,
+                            PartDescription: r.PartDescription,
+                            error:
+                                If(
+                                    IsBlank(r.PartNumber), "❗Part Number cannot be blank",
+                                    IsMatch(r.PartNumber, "[ ,:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+                                    IsMatch(r.PartNumber, "[^A-Za-z0-9\-\/\.]", MatchOptions.Contains), "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+                                    CountRows(Filter(_rows, Lower(PartNumber) = Lower(r.PartNumber))) > 1, "❗Duplicate part number: " & r.PartNumber,
+                                    IsBlank(Trim(r.PartDescription)), "❗ Part Description cannot be blank",
+                                    Blank()
+                                )
+                        }
+                    )
+            }
+        )
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 3 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - Part Description box)
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Gallery9 > Container29 > TextInput4_1
+STEP 3: Property dropdown: OnChange
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Same rule as CHANGE 2 (this is where the reported slash error appeared).
+---------------------------- BEFORE - CHANGE 3 ----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID,
+        _partDescription: Self.Text
+    },
+    Patch(
+        colOpenTabs,
+        _tab,
+        {
+            colPartsDetail:
+                ForAll(
+                    _tab.colPartsDetail As p,
+                    If(
+                        p.LocalID = _id,
+                        {
+                            LocalID: p.LocalID,
+                            PartNumber: p.PartNumber,
+                            PartDescription: _partDescription,
+                            error:
+                                If(IsBlank(p.PartNumber), "❗Part Number cannot be blank",
+                                
+                                If(IsMatch(p.PartNumber, "[ ,/:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+
+                                If(!IsBlank(p.PartNumber) && !IsMatch(p.PartNumber,"^[A-Za-z0-9\-\/\.\r\n\s]*$"), "⚠️ Part number can only contain alphanumeric characters, hyphen(-), forward shash (/), and period (.)",
+                   
+                                If(IsBlank(Trim(_partDescription)), "❗ Part Description cannot be blank", Blank()))))
+                        },
+                        {
+                            LocalID: p.LocalID,
+                            PartNumber: p.PartNumber,
+                            PartDescription: p.PartDescription,
+                            error: p.error
+                        }
+                    )
+                )
+        }
+    )
+)
+---------------------------- AFTER - CHANGE 3 -----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID,
+        _partDescription: Self.Text
+    },
+    With(
+        {
+            _rows: ForAll(
+                _tab.colPartsDetail As p,
+                If(
+                    p.LocalID = _id,
+                    {
+                        LocalID: p.LocalID,
+                        PartNumber: p.PartNumber,
+                        PartDescription: _partDescription
+                    },
+                    {
+                        LocalID: p.LocalID,
+                        PartNumber: p.PartNumber,
+                        PartDescription: p.PartDescription
+                    }
+                )
+            )
+        },
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                colPartsDetail:
+                    ForAll(
+                        _rows As r,
+                        {
+                            LocalID: r.LocalID,
+                            PartNumber: r.PartNumber,
+                            PartDescription: r.PartDescription,
+                            error:
+                                If(
+                                    IsBlank(r.PartNumber), "❗Part Number cannot be blank",
+                                    IsMatch(r.PartNumber, "[ ,:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+                                    IsMatch(r.PartNumber, "[^A-Za-z0-9\-\/\.]", MatchOptions.Contains), "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+                                    CountRows(Filter(_rows, Lower(PartNumber) = Lower(r.PartNumber))) > 1, "❗Duplicate part number: " & r.PartNumber,
+                                    IsBlank(Trim(r.PartDescription)), "❗ Part Description cannot be blank",
+                                    Blank()
+                                )
+                        }
+                    )
+            }
+        )
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 4 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - X (remove part) icon)
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Gallery9 > Container29 > NextArrow2
+STEP 3: Property dropdown: OnSelect
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: After removing a row, the remaining rows are re-checked, so removing one copy of a duplicate clears the other.
+---------------------------- BEFORE - CHANGE 4 ----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID
+    },
+    If(
+        CountRows(_tab.colPartsDetail) < 2,
+        Notify("iQuery should atleast have one part", NotificationType.Error),
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                colPartsDetail:
+                    Filter(
+                        _tab.colPartsDetail,
+                        LocalID <> _id
+                    )
+            }
+        )
+    )
+)
+---------------------------- AFTER - CHANGE 4 -----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        _id: ThisItem.LocalID
+    },
+    If(
+        CountRows(_tab.colPartsDetail) < 2,
+        Notify("iQuery should atleast have one part", NotificationType.Error),
+        With(
+            {
+                _rows: Filter(
+                    _tab.colPartsDetail,
+                    LocalID <> _id
+                )
+            },
+            Patch(
+                colOpenTabs,
+                _tab,
+                {
+                    colPartsDetail:
+                        ForAll(
+                            _rows As r,
+                            {
+                                LocalID: r.LocalID,
+                                PartNumber: r.PartNumber,
+                                PartDescription: r.PartDescription,
+                                error:
+                                    If(
+                                        IsBlank(r.PartNumber), "❗Part Number cannot be blank",
+                                        IsMatch(r.PartNumber, "[ ,:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+                                        IsMatch(r.PartNumber, "[^A-Za-z0-9\-\/\.]", MatchOptions.Contains), "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+                                        CountRows(Filter(_rows, Lower(PartNumber) = Lower(r.PartNumber))) > 1, "❗Duplicate part number: " & r.PartNumber,
+                                        IsBlank(Trim(r.PartDescription)), "❗ Part Description cannot be blank",
+                                        Blank()
+                                    )
+                            }
+                        )
+                }
+            )
+        )
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 5 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - 'Add to list' button (also run by 'Create New Request'))
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Container27 > Container28 > Button7
+STEP 3: Property dropdown: OnSelect
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Rows added from the New Request box or a pasted list are checked with the same rule (was: description check only); a lone line break (CR) now separates parts instead of joining them.
+---------------------------- BEFORE - CHANGE 5 ----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        )
+    },
+    With(
+        {
+            _newParts:
+                ForAll(
+                    Filter(
+                        Split(
+                            Substitute(
+                                Substitute(
+                                    _tab.bulkPasteText,
+                                    Char(13),
+                                    ""
+                                ),
+                                Char(10),
+                                " "
+                            ),
+                            " "
+                        ),
+                        !IsBlank(TrimEnds(Value))
+                    ) As Line,
+                    With(
+                        {
+                            _partNumber: TrimEnds(Line.Value)
+                        },
+                        With(
+                            {
+                                _masterRecord:
+                                    LookUp(
+                                        'Weekly SIO Part Master - Currents' As Master,
+                                        Master.'Part Number' = _partNumber
+                                    )
+                            },
+                            {
+                                LocalID: GUID(),
+                                PartNumber: _partNumber,
+                                PartDescription: Coalesce(
+                                    Text(_masterRecord.'PART DESCRIPTION'),
+                                    ""
+                                ),
+                                error: If(IsBlank(_masterRecord), "⚠️ Please enter Part Description", Blank())
+                            }
+                        )
+                    )
+                )
+        },
+        ClearCollect(
+            colTempPartsDetail,
+            _tab.colPartsDetail
+        );
+
+        Collect(
+            colTempPartsDetail,
+            _newParts
+        );
+
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                colPartsDetail: colTempPartsDetail,
+                bulkPasteText: ""
+            }
+        )
+    )
+);
+---------------------------- AFTER - CHANGE 5 -----------------------------
+With(
+    {
+        _tab: LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        )
+    },
+    With(
+        {
+            _newParts:
+                ForAll(
+                    Filter(
+                        Split(
+                            Substitute(
+                                Substitute(
+                                    _tab.bulkPasteText,
+                                    Char(13),
+                                    " "
+                                ),
+                                Char(10),
+                                " "
+                            ),
+                            " "
+                        ),
+                        !IsBlank(TrimEnds(Value))
+                    ) As Line,
+                    With(
+                        {
+                            _partNumber: TrimEnds(Line.Value)
+                        },
+                        With(
+                            {
+                                _masterRecord:
+                                    LookUp(
+                                        'Weekly SIO Part Master - Currents' As Master,
+                                        Master.'Part Number' = _partNumber
+                                    )
+                            },
+                            {
+                                LocalID: GUID(),
+                                PartNumber: _partNumber,
+                                PartDescription: Coalesce(
+                                    Text(_masterRecord.'PART DESCRIPTION'),
+                                    ""
+                                ),
+                                error: If(IsBlank(_masterRecord), "⚠️ Please enter Part Description", Blank())
+                            }
+                        )
+                    )
+                )
+        },
+        ClearCollect(
+            colTempPartsDetail,
+            _tab.colPartsDetail
+        );
+
+        Collect(
+            colTempPartsDetail,
+            _newParts
+        );
+
+        With(
+            {
+                _rows: colTempPartsDetail
+            },
+            Patch(
+                colOpenTabs,
+                _tab,
+                {
+                    colPartsDetail:
+                        ForAll(
+                            _rows As r,
+                            {
+                                LocalID: r.LocalID,
+                                PartNumber: r.PartNumber,
+                                PartDescription: r.PartDescription,
+                                error:
+                                    If(
+                                        IsBlank(r.PartNumber), "❗Part Number cannot be blank",
+                                        IsMatch(r.PartNumber, "[ ,:]", MatchOptions.Contains), "❗Part number must not contain cage code",
+                                        IsMatch(r.PartNumber, "[^A-Za-z0-9\-\/\.]", MatchOptions.Contains), "⚠️ Part number can contain only alphanumeric characters, hyphen(-), forward-slash(/), or period(.)",
+                                        CountRows(Filter(_rows, Lower(PartNumber) = Lower(r.PartNumber))) > 1, "❗Duplicate part number: " & r.PartNumber,
+                                        IsBlank(Trim(r.PartDescription)), "❗ Part Description cannot be blank",
+                                        Blank()
+                                    )
+                            }
+                        ),
+                    bulkPasteText: ""
+                }
+            )
+        )
+    )
+);
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 6 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - paste format note)
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Container27 > Container28 > Label39
+STEP 3: Property dropdown: Text
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Removes 'comma separated' from the instructions (a comma is treated as a cage code).
+---------------------------- BEFORE - CHANGE 6 ----------------------------
+"Format: Comma seperated, space seperated, or new line seperated."
+---------------------------- AFTER - CHANGE 6 -----------------------------
+"Format: Space separated or new line separated."
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 7 ====================
+STEP 1: Screen: PartsQuerySystem (Manage parts list popup - paste box example)
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PartsModal > Container26 > Container27 > Container28 > TextInput6
+STEP 3: Property dropdown: HintText
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Example no longer shows commas between parts.
+---------------------------- BEFORE - CHANGE 7 ----------------------------
+"MASD123-C GM12345-9, RTUIO23433, etc"
+---------------------------- AFTER - CHANGE 7 -----------------------------
+"MASD123-C GM12345-9 RTUIO23433"
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+------------------------------------------------------------------------------
+For each CHANGE, paste its BEFORE code back into the same control and property.
+
+TESTING
+------------------------------------------------------------------------------
+NOT TESTED YET in dev.
+
+Impact check: every reader of colPartsDetail.error only tests IsBlank(error)
+(Container29 border, Container25 '!', Label40_1, Button8, Icon15, Save & Close
+validation). colCreateQueue still gets one row per part. Icon16 (hidden, never
+selected) still has the old rule and is left as is.
+
+Power Fx interpreter (Microsoft.PowerFx 1.8.1), BEFORE vs AFTER: 99/99 passed.
+Covers the reported bug, cage/comma/space/bad characters, duplicates (same case,
+other case, CRLF, lone CR, partial match not a duplicate), trailing line breaks,
+remove-row, add-to-list, and New Request -> Add to list -> save gates.
+
+Test cases in dev:
+ 1. New Request: slash part NOT in master (e.g. ABC/123) -> Create New Request ->
+    Manage parts list -> type description -> no error -> Save & Close works.
+ 2. Slash part that IS in master -> description fills in, no error.
+ 3. Cage code: ABC:123 on New Request -> message, button greyed out. In the parts
+    list, ABC:123 / ABC,123 / ABC 123 -> cage code error.
+ 4. Duplicates on New Request: 'ABC-1 abc-1' or same part on two lines -> message,
+    button greyed out. 'ABC-1 ABC-12' -> OK.
+ 5. Duplicates in parts list: add a row with an existing part -> both rows yellow,
+    Save greyed out; rename one -> both clear; recreate, remove one with X -> the
+    other clears.
+ 6. Paste a list 'A B A' -> Add to list -> both A rows flagged.
+ 7. Paste a list on separate lines -> each line becomes its own part.
+ 8. Normal: single-part request saves; multi-part request saves one iQuery per
+    part with the same BatchDocNo; open/edit an existing query works as before.
+ 9. Popup shows the new format note and paste example (no commas).
