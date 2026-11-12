@@ -4,7 +4,9 @@ Record:      01
 Date:        2026-11-11
 Made by:     Nofil (with Claude Code)
 Type:        Bug fix + user feedback (same validation rule)
-Status:      PENDING TEST - not yet tested in dev.
+Status:      Tested OK in dev on 2026-11-11. Published to production on 2026-11-11.
+             In export iQuery_Dev_11_Nov_v2_20261112021619.zip (app v1.52, last saved
+             2026-11-12 02:02 UTC): all 7 AFTER blocks match this record exactly.
 Based on:    iQuery_Dev_11_Nov_20261112011618.zip (app last saved 2026-11-04 03:22 UTC)
              No earlier records.
 
@@ -620,7 +622,15 @@ For each CHANGE, paste its BEFORE code back into the same control and property.
 
 TESTING
 ------------------------------------------------------------------------------
-NOT TESTED YET in dev.
+Dev test (reported by Nofil, 2026-11-11): all 7 changes applied with the AFTER code
+in this record, tested in dev, result OK. Individual test case results were not
+reported. Then published to production.
+
+Export check (iQuery_Dev_11_Nov_v2_20261112021619.zip vs the base zip): the 7 AFTER
+blocks match exactly. Other differences are Studio/environment only: rich text
+editor control 2.7.0 -> 2.7.1 (3 controls, formulas unchanged), app description
+v1.51 -> v1.52, Dataverse metadata refresh (no columns added/removed/changed),
+asset storage URLs. Flows, App.pa.yaml, Admin_Screen, Feedback_Screen unchanged.
 
 Impact check: every reader of colPartsDetail.error only tests IsBlank(error)
 (Container29 border, Container25 '!', Label40_1, Button8, Icon15, Save & Close
