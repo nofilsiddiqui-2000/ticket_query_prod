@@ -1,4 +1,4 @@
-CHANGE RECORD 03 - One part of a group can add attachments (with a comment)
+CHANGE RECORD 03 - One part of a group can add attachments (with a comment) + bigger file box
 ==============================================================================
 Record:     03
 Date:       2026-11-13
@@ -6,15 +6,17 @@ Made by:    Nofil (with Claude Code)
 Type:       User feedback (group queries)
 Based on:   iQuery_Dev_20261113051208.zip (last saved 2026-11-13 05:09 UTC).
             Includes Change_History 01 and 02 (02 is PENDING TEST, already in this zip).
-            No record changes these 4 properties.
+            No record changes these properties.
 Reference:  sandbox record #14 (2026-11-05). Every BEFORE below was read again from the
             13 Nov zip: all 4 match #14's BEFORE. Difference from #14: CHANGE 3 only guards
             ONE part of a group; it adds no warning on normal queries / group edit (that was
             a behaviour change for everyone that this request doesn't need).
 Status:     PENDING TEST - not yet tested in dev.
-            Independent static review 2026-11-13: PASS WITH NOTES, no blockers (all BEFORE
-            values match the zip, valid Power Fx, only the intended cases change). Not a
-            runtime test.
+            Independent static review 2026-11-13 of CHANGE 1-4: PASS WITH NOTES, no
+            blockers (all BEFORE values match the zip, valid Power Fx, only the intended
+            cases change). Not a runtime test.
+            CHANGE 5-8 (bigger file box) added 2026-11-13 after that review; their BEFORE
+            values and the controls below the box were checked against the zip.
 
 WHY
 - Files are stored once per group, on the FIRST query of the group (Form1.Item uses the
@@ -27,6 +29,9 @@ WHY
   just before SubmitForm(Form1) (it sets showAutoAssignConfirmModal = true "to stay on the
   same screen"), so the picked files are saved, and the comment goes into THIS part's
   history (HiddenSaveButton, one-part save).
+- The attachment box is only 100 px high. With 2 files, the "Attach file" link is below
+  the visible part and you must scroll inside the box to find it (reported in dev on
+  2026-11-13, one part in edit mode with 2 files). CHANGE 5-8 make the box 60 px taller.
 Rules (from #14, Nofil 2026-11-05):
 1. On one part, the person it is assigned to, in their department, can add files ("Assign
    to yourself" first, as for any change). The file goes to the whole group.
@@ -36,9 +41,17 @@ Rules (from #14, Nofil 2026-11-05):
 3. One part can never remove files (they belong to the whole group).
 
 IMPACT / RISK
-- 4 properties: Form1.DefaultMode, btnSaveClose.OnSelect (one text only),
-  DataCardValue4.OnRemoveFile (was empty), Form1.OnFailure (one Patch added after the
-  existing Notify).
+- CHANGE 1-4 (who can add files): Form1.DefaultMode, btnSaveClose.OnSelect (one text
+  only), DataCardValue4.OnRemoveFile (was empty), Form1.OnFailure (one Patch added after
+  the existing Notify).
+- CHANGE 5-8 (size only, numbers): attachment box 100 -> 160, Form1 111 -> 171, section 3
+  (Container 3) 60 px taller when open (580 -> 640, or 850 -> 910 when the query has old
+  PNQ attachments), the "Old PNQ attachments..." banner 60 px lower (608 -> 668).
+  Everything else in the section moves by itself: the old attachments label/box and
+  lblOR are placed from Form1.Y + Form1.Height, the Upload button from Form1.Y. The
+  sections below move down by themselves (newQueryMainContainer stacks the sections and
+  scrolls). The banner is the only control with a fixed Y below the box, so it is moved by
+  hand. Section 3 closed (30 px) is unchanged. Applies to every query, not only groups.
 - CHANGE 1, only one case changes: editing one part of a group, assigned to you, your
   department -> attachment box editable (was view-only). Not assigned, other department,
   view mode, group edit, New Request and normal queries behave exactly as before.
@@ -80,7 +93,8 @@ IMPACT / RISK
 - Known limit (as today for every query): files picked but not saved are lost if you switch
   tabs or close the tab.
 
-THE CHANGE (4 changes, all on screen PartsQuerySystem, do them in order, same session)
+THE CHANGE (8 changes, all on screen PartsQuerySystem, do them in order, same session)
+CHANGE 1-4 = who can add files; CHANGE 5-8 = bigger file box (do 5-8 together).
 
 ==================== CHANGE 1 ====================
 STEP 1: Screen: PartsQuerySystem
@@ -737,7 +751,64 @@ If(
 )
 ---------------------------- END OF AFTER ----------------------------------
 
+==================== CHANGE 5 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > Form1 > Attachments_DataCard1 > DataCardValue4
+STEP 3: Property dropdown: Height
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER value below.
+What this changes: the attachment box is 60 px taller, so 2-3 files and the "Attach file"
+link fit without scrolling. (Unlock the card first if needed, as in CHANGE 3.)
+---------------------------- BEFORE - CHANGE 5 ----------------------------
+100
+---------------------------- AFTER - CHANGE 5 -----------------------------
+160
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 6 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > Form1
+STEP 3: Property dropdown: Height
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER value below.
+What this changes: Form1 grows with the box (box + 11, as before).
+---------------------------- BEFORE - CHANGE 6 ----------------------------
+111
+---------------------------- AFTER - CHANGE 6 -----------------------------
+171
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 7 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3
+STEP 3: Property dropdown: Height
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER value below.
+What this changes: section 3 is 60 px taller when open, so the bigger box is not cut off.
+Only the two numbers change (580 -> 640, 850 -> 910).
+---------------------------- BEFORE - CHANGE 7 ----------------------------
+If(3 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 
+If(!IsBlank(LookUp(OldiQueryAttachments, 'Doc No'= LookUp(colOpenTabs, TabID = varActiveTabID).DocNo)), 850, 580)
+, 30)
+---------------------------- AFTER - CHANGE 7 -----------------------------
+If(3 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 
+If(!IsBlank(LookUp(OldiQueryAttachments, 'Doc No'= LookUp(colOpenTabs, TabID = varActiveTabID).DocNo)), 910, 640)
+, 30)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 8 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > oldAttachmentBanner
+STEP 3: Property dropdown: Y
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER value below.
+What this changes: the "Old PNQ attachments open better in Desktop version" text moves down
+60 px with the box (it has a fixed position; only shows for queries with old attachments).
+---------------------------- BEFORE - CHANGE 8 ----------------------------
+608
+---------------------------- AFTER - CHANGE 8 -----------------------------
+668
+---------------------------- END OF AFTER ----------------------------------
+
 HOW TO UNDO
+- CHANGE 5-8: paste back 100 (DataCardValue4 > Height), 111 (Form1 > Height), BEFORE -
+  CHANGE 7 (Container 3 > Height) and 608 (oldAttachmentBanner > Y). Undo all 4 together.
 - CHANGE 1: paste BEFORE - CHANGE 1 back into Form1 > DefaultMode.
 - CHANGE 2: paste BEFORE - CHANGE 2 back into btnSaveClose > OnSelect.
 - CHANGE 3: clear DataCardValue4 > OnRemoveFile (type false).
@@ -801,5 +872,12 @@ T12. Same failure via "Assign and Save" (part assigned to someone else): the pop
 T13. A (the first query) on its own, Edit Form: adding works; X is refused like T4.
 T14. Pick a file on one part (don't save), switch tab and back -> the pick is gone, NO
     "Files are shared..." message (as today for every query).
+T16. Box size (CHANGE 5-8): a query with 2 files in edit mode -> both files AND the
+    "Attach file" link are visible without scrolling inside the box. With 4+ files the box
+    scrolls (as before). Section 3: nothing is cut off at the bottom; the Upload button
+    (normal query) is still next to the box; sections below (4, 5, ...) start right after
+    section 3 and the form scrolls to the end. Close and reopen section 3 -> OK. A query
+    with OLD PNQ attachments: the "Old PNQ attachments..." text sits between the box and
+    the old attachments, overlapping nothing. Check at your normal browser zoom.
 T15. Configuration Management user on one part: file + comment + Misses Tracker fields ->
     Save works as before.
