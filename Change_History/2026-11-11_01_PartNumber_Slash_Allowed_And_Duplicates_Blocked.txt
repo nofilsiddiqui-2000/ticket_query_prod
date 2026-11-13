@@ -7,6 +7,9 @@ Type:        Bug fix + user feedback (same validation rule)
 Status:      Tested OK in dev on 2026-11-11. Published to production on 2026-11-11.
              In export iQuery_Dev_11_Nov_v2_20261112021619.zip (app v1.52, last saved
              2026-11-12 02:02 UTC): all 7 AFTER blocks match this record exactly.
+             2026-11-12: production publish confirmed by Nofil. Export
+             iQuery_Dev_12_Nov_20261113023644.zip holds the same app (identical
+             .msapp, v1.52); all 7 AFTER blocks match.
 Based on:    iQuery_Dev_11_Nov_20261112011618.zip (app last saved 2026-11-04 03:22 UTC)
              No earlier records.
 
