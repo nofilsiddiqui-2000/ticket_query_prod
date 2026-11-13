@@ -12,6 +12,11 @@ Reference:  sandbox record #16 (Sandbox v2.4). Every BEFORE below was read again
 Status:     PENDING TEST - not yet tested in dev.
             Independent static review 2026-11-12: PASS (all BEFORE values match the zip,
             no circular references, valid property and column names). Not a runtime test.
+            2026-11-13: applied in dev. Export iQuery_Dev_20261113051208.zip (last saved
+            2026-11-13 05:09 UTC): all AFTER values match this record, except
+            Icon12.HoverColor (not set in the export, still the default
+            ColorFade(Self.Color, 20%)). Label41.Text AFTER corrected to the text used in
+            dev ("this iQuery only"). No other control changed.
 
 WHY
 - A query in a group only shows "Doc No. : <no>": users can't see it is part of a group
@@ -27,7 +32,7 @@ WHAT THE USER WILL SEE
 - View mode, group query:  Doc No: CM-0012-00045 (Part of group CM-0012-00043, 4 parts)
 - View mode, single query: Doc No: CM-0012-00045
 - Edit mode, one part:     [i] Part of group CM-0012-00043 (4 parts). Field changes apply to
-                           this query only; files are shared with the group. [Edit whole group]
+                           this iQuery only; files are shared with the group. [Edit whole group]
 - Group edit:              [i] Group edit: your changes apply to all 4 parts in group CM-0012-00043.
 - Group details section:   "Group size: 4 parts" + one card per query (Doc No on brown strip,
                            "P/N <part>" below), first query first.
@@ -103,7 +108,7 @@ With(
                 "Group edit: your changes apply to all " & _parts & " parts in group " &
                     _tab.batchDocNo & ".",
                 "Part of group " & _tab.batchDocNo & " (" & _parts & " parts)" &
-                    ". Field changes apply to this query only; files are shared with the group."
+                    ". Field changes apply to this iQuery only; files are shared with the group."
             )
         )
     )
@@ -543,7 +548,7 @@ NOT TESTED YET.
 After pasting: App Checker (top right) must show no new red errors.
 Group bar (edit mode):
 T1. One part of a group, Edit Form: bar "Part of group <no> (<n> parts). Field changes apply
-    to this query only; files are shared with the group." Semibold dark text, brown info
+    to this iQuery only; files are shared with the group." Semibold dark text, brown info
     icon left, brown "Edit whole group" button right, all inside one beige bar, centred.
     The text does not run under the button. <n> = real number of parts in the group.
 T2. Click "Edit whole group" -> group mode starts exactly as before (same lock checks).
