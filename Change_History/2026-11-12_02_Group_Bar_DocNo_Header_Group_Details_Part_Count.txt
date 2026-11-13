@@ -225,7 +225,7 @@ What this changes: the section is shorter when open (cards instead of a tall tab
 ---------------------------- BEFORE - CHANGE 5 - Container30.Height --------
 If(8 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 210, 30)
 ---------------------------- AFTER - CHANGE 5 - Container30.Height ---------
-If(9 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 140, 30)
+If(9 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 160, 30)
 ---------------------------- END OF AFTER ----------------------------------
   LayoutMinHeight : 210 -> 30
 
@@ -429,7 +429,7 @@ Gallery8 (BEFORE -> AFTER):
   X               : 185                                 -> 25
   Y               : 70                                  -> 64
   Width           : Parent.Width-200                    -> Parent.Width - 50
-  Height          : 122                                 -> 62
+  Height          : 122                                 -> 80
   TemplateSize    : 126                                 -> 190
   TemplatePadding : not set in the zip (default 0)      -> 4
 
@@ -458,7 +458,7 @@ Label46 (BEFORE -> AFTER):
   Text            : ThisItem.PartNumber                 -> "P/N " & ThisItem.PartNumber
   Y               : Parent.TemplateHeight*0.33          -> 24
   Width           : 126                                 -> Parent.TemplateWidth
-  Height          : Parent.TemplateHeight*0.67          -> Parent.TemplateHeight - 24
+  Height          : Parent.TemplateHeight*0.67          -> 30
   Fill            : RGBA(199, 178, 137, 1)              -> RGBA(246, 241, 235, 1)
   Color           : not set in the zip (default, check in Studio) -> RGBA(32, 32, 32, 1)
   BorderThickness : 1                                   -> 0
@@ -477,6 +477,7 @@ transparent inside.
 Rectangle3 (BEFORE -> AFTER):
   X               : Parent.TemplateWidth-1              -> 0
   Width           : 1                                   -> Parent.TemplateWidth
+  Height          : Parent.TemplateHeight               -> 54
   Fill            : RGBA(0, 51, 102, 1)                 -> RGBA(0, 0, 0, 0)
   BorderColor     : RGBA(0, 89, 178, 1)                 -> RGBA(211, 196, 173, 1)
   BorderThickness : not set in the zip (default 0)      -> 1
@@ -568,7 +569,11 @@ T15. "Group size: <n> parts" and one card per query (brown strip Doc No, "P/N ..
 T16. Click the header TEXT -> this section opens/closes (not Parts Detail). The arrow does
      the same and turns (right when closed, down when open).
 T17. Collapsed: 30 px bar. Expanded: nothing cut at the bottom of the cards.
-T18. A group with 8+ parts: cards scroll sideways; scroll bar does not cover "P/N" (note it).
+T18. A group with 8+ parts: cards scroll sideways; the scroll bar sits BELOW the cards
+     (card 54 px fixed, gallery 80 px), not over the "P/N" line. Groups without a scroll
+     bar: a small empty gap under the cards is expected.
+     (First dev look 2026-11-12, 29 parts, with gallery 62 / card = TemplateHeight: the
+     P/N line was cut and the scroll bar covered it.)
 T19. Long part number: one line, cut at the end if too long.
 T20. Other sections (Parts Detail, Attachments, ...) unchanged.
 T21. The count is the same in the Doc No header, the bar and the group details.
