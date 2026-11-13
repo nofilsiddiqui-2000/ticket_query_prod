@@ -1,0 +1,805 @@
+CHANGE RECORD 03 - One part of a group can add attachments (with a comment)
+==============================================================================
+Record:     03
+Date:       2026-11-13
+Made by:    Nofil (with Claude Code)
+Type:       User feedback (group queries)
+Based on:   iQuery_Dev_20261113051208.zip (last saved 2026-11-13 05:09 UTC).
+            Includes Change_History 01 and 02 (02 is PENDING TEST, already in this zip).
+            No record changes these 4 properties.
+Reference:  sandbox record #14 (2026-11-05). Every BEFORE below was read again from the
+            13 Nov zip: all 4 match #14's BEFORE. Difference from #14: CHANGE 3 only guards
+            ONE part of a group; it adds no warning on normal queries / group edit (that was
+            a behaviour change for everyone that this request doesn't need).
+Status:     PENDING TEST - not yet tested in dev.
+            Independent static review 2026-11-13: PASS WITH NOTES, no blockers (all BEFORE
+            values match the zip, valid Power Fx, only the intended cases change). Not a
+            runtime test.
+
+WHY
+- Files are stored once per group, on the FIRST query of the group (Form1.Item uses the
+  BatchDocNo), so every part already shows the same file list.
+- When you click Edit Form on ONE part of a group, Form1.DefaultMode has an extra block
+  ("part of a group, not in group edit -> view only"). So you can see the files but not
+  add any, even when the part is assigned to you. Today the only way to add a file is
+  "Edit whole group".
+- The rest already works: on one part, Save (btnSaveClose) already switches Form1 to Edit
+  just before SubmitForm(Form1) (it sets showAutoAssignConfirmModal = true "to stay on the
+  same screen"), so the picked files are saved, and the comment goes into THIS part's
+  history (HiddenSaveButton, one-part save).
+Rules (from #14, Nofil 2026-11-05):
+1. On one part, the person it is assigned to, in their department, can add files ("Assign
+   to yourself" first, as for any change). The file goes to the whole group.
+2. Files are saved with Save, and a comment is required ("attaching drawing XYZ"). The
+   comment is the history entry (name, department, time). The Upload button stays hidden
+   on one part.
+3. One part can never remove files (they belong to the whole group).
+
+IMPACT / RISK
+- 4 properties: Form1.DefaultMode, btnSaveClose.OnSelect (one text only),
+  DataCardValue4.OnRemoveFile (was empty), Form1.OnFailure (one Patch added after the
+  existing Notify).
+- CHANGE 1, only one case changes: editing one part of a group, assigned to you, your
+  department -> attachment box editable (was view-only). Not assigned, other department,
+  view mode, group edit, New Request and normal queries behave exactly as before.
+  The grey cover in that section (Container31_2) stops above the attachments label, so the
+  box is not covered.
+- Saving: no logic change. Form1 has only the Attachments card and a hidden DocNo card that
+  writes back the same DocNo the form looked up, so the form writes nothing else.
+- After a save on one part assigned to you, the tab stays open in edit and the message
+  shows the FIRST query's Doc No (both existing behaviour).
+- CHANGE 2: the "No changes made." message now also says to add a comment when files were
+  added. It shows in the same cases as before (no comment, no field change).
+- CHANGE 3 runs only when a file is removed in the box on ONE part of a group. Everywhere
+  else nothing happens (as today: no OnRemoveFile). OnRemoveFile and Reset() on the
+  attachment box are not used anywhere else in this app -> T4 confirms them. If App
+  Checker shows an error on Reset(DataCardValue4), stop and tell me.
+- CHANGE 4 runs only when SubmitForm(Form1) fails, and only clears the pop-up flag when the
+  query is assigned to you, in your department (the case where Save itself set it). Before
+  this fix one part could not add files, so a failed save almost never happened there; now
+  a too-big or blocked file can cause it, and the "Assignment Confirmation" pop-up would
+  stay on screen. In the "Assign and Save" case nothing changes. On New Request, normal
+  queries and group edit the flag is already false, so the Patch changes nothing.
+  CHANGE 4 depends on CHANGE 1: without CHANGE 1, closing the pop-up would switch Form1
+  back to View and drop the picked files. Never keep CHANGE 4 without CHANGE 1.
+- After a successful save on one part the tab stays open and Form1 now stays in Edit
+  (before, it went back to View). T1 checks the saved file is not attached twice.
+- Edit Form locks only the part you clicked. Files on one part are written to the FIRST
+  query's row, which that lock does not protect -> T10 covers two people at the same time.
+- If Studio asks you to unlock Attachments_DataCard1 (CHANGE 3), that also changes the
+  card's lock setting in the export. Expected, not a problem.
+- Exception to rule 2 (same as normal queries today): if you also change a field and give
+  its reason, Save works without a comment.
+- Files are Dataverse Notes on the group's first Query_Details row. Two people saving files
+  on the same group at the same time is not documented by Microsoft -> T9/T10 must pass
+  before production.
+- Not touched: data sources, flows, assignment, locks, history/comment code, the Upload
+  button, the grey covers, HiddenSaveButton, other screens.
+- Known limit: in old groups whose FIRST query has a blank BatchDocNo, that first query acts
+  like a normal query (removing there is allowed, as today).
+- Known limit (as today for every query): files picked but not saved are lost if you switch
+  tabs or close the tab.
+
+THE CHANGE (4 changes, all on screen PartsQuerySystem, do them in order, same session)
+
+==================== CHANGE 1 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > Form1
+STEP 3: Property dropdown: DefaultMode
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: the attachment box is no longer view-only just because you are editing ONE part
+of a group. Only the "part of a group" block (14 lines) is removed; the "assigned to you"
+and "your department" rules stay exactly as they are.
+---------------------------- BEFORE - CHANGE 1 ----------------------------
+If(LookUp(colOpenTabs, TabID = varActiveTabID).TabLabel = "New Request",FormMode.New,
+If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing,
+    If(
+        Or(
+            And(
+                !IsBlank(LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).batchDocNo),
+                !LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isBatchEditing,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isEditing
+            ),
+            And(
+                !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+                LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isEditing
+            ),
+            And(
+                !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+                LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept <> varUser.Department,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isEditing
+            )
+        ),
+        If(LookUp(colOpenTabs, TabID = varActiveTabID).showAutoAssignConfirmModal, FormMode.Edit,FormMode.View),
+        FormMode.Edit
+    ),
+    FormMode.View
+))
+---------------------------- AFTER - CHANGE 1 -----------------------------
+If(LookUp(colOpenTabs, TabID = varActiveTabID).TabLabel = "New Request",FormMode.New,
+If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing,
+    If(
+        Or(
+            And(
+                !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+                LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isEditing
+            ),
+            And(
+                !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+                LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept <> varUser.Department,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).isEditing
+            )
+        ),
+        If(LookUp(colOpenTabs, TabID = varActiveTabID).showAutoAssignConfirmModal, FormMode.Edit,FormMode.View),
+        FormMode.Edit
+    ),
+    FormMode.View
+))
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 2 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > btnSaveClose
+        (the Save / Update button at the bottom of an open query)
+STEP 3: Property dropdown: OnSelect
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: ONE line only, the message text. Old: "No changes made."
+New: "No changes made. If you added files, please add a comment describing them."
+Every other line is exactly as in the zip.
+---------------------------- BEFORE - CHANGE 2 ----------------------------
+Set(showLoader, true);
+Set(varValidationError, Blank());
+
+If(
+    (!IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) && LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName &&
+    selectAssignedTo.Selected.Person <> varUser.FullName),
+    Set(varValidationError, "You need to assign the query to yourself first"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, "Please select an Aircraft Type"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, "Please select an Aircraft Model"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && !IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)&" Aircraft Model do not exist anymore"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)&" Aircraft Type do not exist anymore"),
+
+    IsBlank(selectAssignedDept.Selected.Value),
+    Set(varValidationError, "Please select an Assigned Department"),
+
+    IsBlank(txtNumParts.Text),
+    Set(varValidationError, "Please enter number of parts"),
+
+    IsBlank(txtOriginator.Text),
+    Set(varValidationError, "Please enter Originator"),
+
+    IsBlank(txtOriginatorDept.Text),
+    Set(varValidationError, "Please enter Originator Department"),
+
+    IsBlank(cmbPriority.Selected.Value),
+    Set(varValidationError, "Please select Priority"),
+
+    IsBlank(cmbStatus.Selected.Value),
+    Set(varValidationError, "Please select Status"),
+
+    IsBlank(pnqSubject.Selected.Value),
+    Set(varValidationError, "Please select Subject"),
+
+    IsBlank(dtpNeedDate.SelectedDate),
+    Set(varValidationError, "Please select Need Date"),
+
+    IsBlank(selectAssignedTo.Selected),
+    Set(varValidationError, "Please assign the PNQ to a user"),
+    
+    LookUp(colOpenTabs, TabID = varActiveTabID).isIncorrectASN,
+    Set(varValidationError, "Please enter correct Aircraft Serial Number"),
+
+    cmbPriority.Selected.Value = 'Priority (PNQ_Backlogs)'.AOG && IsBlank(txtAircraftSerial.Text),
+    Set(varValidationError, "Aircraft Serial Number is required for AOG requests"),
+
+    IsBlank(txtQueryDesc.Text),
+    Set(varValidationError, "Please enter Query Description"),
+
+    Len(RichTextEditor_Pasted_Attachment.HtmlText) > 1048500,
+    Set(varValidationError, "Attachment size exceeds maximum allowed limit"),
+
+    (If(Text(cmbPriority.Selected.Value) = "AOG" || Text(cmbPriority.Selected.Value) = "Critical", IsBlank(txtSalesOrder.Text), false)),
+    Set(varValidationError, "Sales Order/ SVO Number is required for AOG and Critical requests"),
+
+    (LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+        &&
+    !LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing
+        &&
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+        &&
+    selectAssignedDept.Selected.Value <> "Configuration Management"
+        &&
+    varUser.Department = "Configuration Management"
+        &&
+    IsBlank(selectPartsDivision.Selected.Value)
+    ),
+    Set(varValidationError, "Please enter Parts Category"),
+
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail,
+            !IsBlank(error)
+        )
+    ) > 0,
+    Set(varValidationError, "One or more Part Details contain errors"),
+
+    !IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated) &&
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+            IsBlank(Reason)
+        )
+    ) > 0 &&
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Set(varValidationError, "Please provide a reason for every modified field"),
+
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) &&
+    selectAssignedDept.Selected.Value <> LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept &&
+    selectAssignedDept.Selected.Value <> varUser.Department &&
+    IsBlank(CommentsRichTextEditor.HtmlText),
+    Set(varValidationError, "Please add a comment describing your changes."),
+
+    IsBlank(CommentsRichTextEditor.HtmlText) &&
+    IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated),
+        With(
+        {
+            sd: LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+            tsd: LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails
+        },
+        If(
+            sd.CustomerID = tsd.CustomerID &&
+            sd.CustomerAccountNumber = tsd.CustomerAccountNumber &&
+            sd.ContactName = tsd.ContactName &&     // duplicate
+            sd.ContactName = tsd.ContactName &&
+            sd.PartsDivision = tsd.PartsDivision &&
+            sd.AlternativePartNumber = tsd.AlternativePartNumber &&
+            sd.'Quote Number' = tsd.'Quote Number' &&
+            sd.NHA = tsd.NHA &&
+            sd.ZendeskTicketNumber = tsd.ZendeskTicketNumber &&
+            sd.SalesforceCaseNumber = tsd.SalesforceCaseNumber &&
+            sd.'Sales Order' = tsd.'Sales Order' &&
+            sd.TechRef = tsd.TechRef &&
+            sd.PricingComments = tsd.PricingComments &&
+            sd.VendorName = tsd.VendorName &&
+            sd.'Vendor list Price' = tsd.'Vendor list Price' &&
+            sd.VendorCurrency = tsd.VendorCurrency &&
+            sd.BombardierCost = tsd.BombardierCost &&
+            sd.BBDCurrency = tsd.BBDCurrency &&
+            sd.LeadTime = tsd.LeadTime &&
+            sd.Solution = tsd.Solution,
+            
+            Set(varValidationError, "No changes made."),
+            
+            Set(varValidationError, "Please add a comment describing your changes.")
+        )
+    )
+);
+If(
+    !IsBlank(varValidationError) &&
+    Or(
+        IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+        selectAssignedTo.Selected.Person <> varUser.FullName
+    )
+    ,
+    Notify(varValidationError, NotificationType.Error),
+
+    // Continue Save Logic
+    If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+            &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+            &&
+        selectAssignedDept.Selected.Value <> "Configuration Management"
+            &&
+        varUser.Department = "Configuration Management"
+            &&
+        Or(IsBlank(PassFailDropdown.Selected.Value),
+        PassFailDropdown.Selected.Value = "Fail" && Or(IsBlank(FailReasonCombobox.Selected.Reason), IsBlank(TextInputReasonForFail.Text))),
+
+    Notify("Please fill Misses Tracker (marked *)", NotificationType.Error),
+
+    // Step to Prepare a batch queue before SubmitForm(Form1)
+    If(
+        And(
+            !IsBlank(LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).batchDocNo),
+            !LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isBatchEditing,
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isEditing,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department
+        ),
+        Patch(
+            colOpenTabs,
+            LookUp(colOpenTabs, TabID = varActiveTabID),
+            {
+                showAutoAssignConfirmModal: true        // to stay on the same screen
+            }
+        );
+    );
+
+    Set(
+        varBaseDocNo,
+        LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ).DocNo
+    );
+
+    Set(
+        varIsBatchCreate,
+        Value(txtNumParts.Text) > 1
+    );
+
+    ClearCollect(
+        colCreateQueue,
+        If(
+            varIsBatchCreate,
+            ForAll(
+                Sequence(
+                    CountRows(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).colPartsDetail
+                    )
+                ),
+                With(
+                    {
+                        _part: Index(
+                            LookUp(
+                                colOpenTabs,
+                                TabID = varActiveTabID
+                            ).colPartsDetail,
+                            Value
+                        )
+                    },
+                    {
+                        SeqNo: Value,
+                        DocNo: Left(varBaseDocNo, Len(varBaseDocNo) - 5) &
+                            Text(
+                                Value(Right(varBaseDocNo, 5)) + Value - 1,
+                                "00000"
+                            ),
+                        BatchDocNo: varBaseDocNo,
+                        PartNumber: _part.PartNumber,
+                        PartDescription: _part.PartDescription
+                    }
+                )
+            ),
+            Table(
+                {
+                    SeqNo: 1,
+                    DocNo: varBaseDocNo,
+                    BatchDocNo: Blank(),
+                    PartNumber: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartNumber,
+                    PartDescription: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartDescription
+                }
+            )
+        )
+    );
+    Set(uploadButtonClicked, false);
+    SubmitForm(Form1);
+);
+);
+Set(showLoader, false);
+---------------------------- AFTER - CHANGE 2 -----------------------------
+Set(showLoader, true);
+Set(varValidationError, Blank());
+
+If(
+    (!IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) && LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName &&
+    selectAssignedTo.Selected.Person <> varUser.FullName),
+    Set(varValidationError, "You need to assign the query to yourself first"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, "Please select an Aircraft Type"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, "Please select an Aircraft Model"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && !IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)&" Aircraft Model do not exist anymore"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)&" Aircraft Type do not exist anymore"),
+
+    IsBlank(selectAssignedDept.Selected.Value),
+    Set(varValidationError, "Please select an Assigned Department"),
+
+    IsBlank(txtNumParts.Text),
+    Set(varValidationError, "Please enter number of parts"),
+
+    IsBlank(txtOriginator.Text),
+    Set(varValidationError, "Please enter Originator"),
+
+    IsBlank(txtOriginatorDept.Text),
+    Set(varValidationError, "Please enter Originator Department"),
+
+    IsBlank(cmbPriority.Selected.Value),
+    Set(varValidationError, "Please select Priority"),
+
+    IsBlank(cmbStatus.Selected.Value),
+    Set(varValidationError, "Please select Status"),
+
+    IsBlank(pnqSubject.Selected.Value),
+    Set(varValidationError, "Please select Subject"),
+
+    IsBlank(dtpNeedDate.SelectedDate),
+    Set(varValidationError, "Please select Need Date"),
+
+    IsBlank(selectAssignedTo.Selected),
+    Set(varValidationError, "Please assign the PNQ to a user"),
+    
+    LookUp(colOpenTabs, TabID = varActiveTabID).isIncorrectASN,
+    Set(varValidationError, "Please enter correct Aircraft Serial Number"),
+
+    cmbPriority.Selected.Value = 'Priority (PNQ_Backlogs)'.AOG && IsBlank(txtAircraftSerial.Text),
+    Set(varValidationError, "Aircraft Serial Number is required for AOG requests"),
+
+    IsBlank(txtQueryDesc.Text),
+    Set(varValidationError, "Please enter Query Description"),
+
+    Len(RichTextEditor_Pasted_Attachment.HtmlText) > 1048500,
+    Set(varValidationError, "Attachment size exceeds maximum allowed limit"),
+
+    (If(Text(cmbPriority.Selected.Value) = "AOG" || Text(cmbPriority.Selected.Value) = "Critical", IsBlank(txtSalesOrder.Text), false)),
+    Set(varValidationError, "Sales Order/ SVO Number is required for AOG and Critical requests"),
+
+    (LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+        &&
+    !LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing
+        &&
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+        &&
+    selectAssignedDept.Selected.Value <> "Configuration Management"
+        &&
+    varUser.Department = "Configuration Management"
+        &&
+    IsBlank(selectPartsDivision.Selected.Value)
+    ),
+    Set(varValidationError, "Please enter Parts Category"),
+
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail,
+            !IsBlank(error)
+        )
+    ) > 0,
+    Set(varValidationError, "One or more Part Details contain errors"),
+
+    !IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated) &&
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+            IsBlank(Reason)
+        )
+    ) > 0 &&
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Set(varValidationError, "Please provide a reason for every modified field"),
+
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) &&
+    selectAssignedDept.Selected.Value <> LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept &&
+    selectAssignedDept.Selected.Value <> varUser.Department &&
+    IsBlank(CommentsRichTextEditor.HtmlText),
+    Set(varValidationError, "Please add a comment describing your changes."),
+
+    IsBlank(CommentsRichTextEditor.HtmlText) &&
+    IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated),
+        With(
+        {
+            sd: LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+            tsd: LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails
+        },
+        If(
+            sd.CustomerID = tsd.CustomerID &&
+            sd.CustomerAccountNumber = tsd.CustomerAccountNumber &&
+            sd.ContactName = tsd.ContactName &&     // duplicate
+            sd.ContactName = tsd.ContactName &&
+            sd.PartsDivision = tsd.PartsDivision &&
+            sd.AlternativePartNumber = tsd.AlternativePartNumber &&
+            sd.'Quote Number' = tsd.'Quote Number' &&
+            sd.NHA = tsd.NHA &&
+            sd.ZendeskTicketNumber = tsd.ZendeskTicketNumber &&
+            sd.SalesforceCaseNumber = tsd.SalesforceCaseNumber &&
+            sd.'Sales Order' = tsd.'Sales Order' &&
+            sd.TechRef = tsd.TechRef &&
+            sd.PricingComments = tsd.PricingComments &&
+            sd.VendorName = tsd.VendorName &&
+            sd.'Vendor list Price' = tsd.'Vendor list Price' &&
+            sd.VendorCurrency = tsd.VendorCurrency &&
+            sd.BombardierCost = tsd.BombardierCost &&
+            sd.BBDCurrency = tsd.BBDCurrency &&
+            sd.LeadTime = tsd.LeadTime &&
+            sd.Solution = tsd.Solution,
+            
+            Set(varValidationError, "No changes made. If you added files, please add a comment describing them."),
+            
+            Set(varValidationError, "Please add a comment describing your changes.")
+        )
+    )
+);
+If(
+    !IsBlank(varValidationError) &&
+    Or(
+        IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+        selectAssignedTo.Selected.Person <> varUser.FullName
+    )
+    ,
+    Notify(varValidationError, NotificationType.Error),
+
+    // Continue Save Logic
+    If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+            &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+            &&
+        selectAssignedDept.Selected.Value <> "Configuration Management"
+            &&
+        varUser.Department = "Configuration Management"
+            &&
+        Or(IsBlank(PassFailDropdown.Selected.Value),
+        PassFailDropdown.Selected.Value = "Fail" && Or(IsBlank(FailReasonCombobox.Selected.Reason), IsBlank(TextInputReasonForFail.Text))),
+
+    Notify("Please fill Misses Tracker (marked *)", NotificationType.Error),
+
+    // Step to Prepare a batch queue before SubmitForm(Form1)
+    If(
+        And(
+            !IsBlank(LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).batchDocNo),
+            !LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isBatchEditing,
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isEditing,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department
+        ),
+        Patch(
+            colOpenTabs,
+            LookUp(colOpenTabs, TabID = varActiveTabID),
+            {
+                showAutoAssignConfirmModal: true        // to stay on the same screen
+            }
+        );
+    );
+
+    Set(
+        varBaseDocNo,
+        LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ).DocNo
+    );
+
+    Set(
+        varIsBatchCreate,
+        Value(txtNumParts.Text) > 1
+    );
+
+    ClearCollect(
+        colCreateQueue,
+        If(
+            varIsBatchCreate,
+            ForAll(
+                Sequence(
+                    CountRows(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).colPartsDetail
+                    )
+                ),
+                With(
+                    {
+                        _part: Index(
+                            LookUp(
+                                colOpenTabs,
+                                TabID = varActiveTabID
+                            ).colPartsDetail,
+                            Value
+                        )
+                    },
+                    {
+                        SeqNo: Value,
+                        DocNo: Left(varBaseDocNo, Len(varBaseDocNo) - 5) &
+                            Text(
+                                Value(Right(varBaseDocNo, 5)) + Value - 1,
+                                "00000"
+                            ),
+                        BatchDocNo: varBaseDocNo,
+                        PartNumber: _part.PartNumber,
+                        PartDescription: _part.PartDescription
+                    }
+                )
+            ),
+            Table(
+                {
+                    SeqNo: 1,
+                    DocNo: varBaseDocNo,
+                    BatchDocNo: Blank(),
+                    PartNumber: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartNumber,
+                    PartDescription: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartDescription
+                }
+            )
+        )
+    );
+    Set(uploadButtonClicked, false);
+    SubmitForm(Form1);
+);
+);
+Set(showLoader, false);
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 3 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > Form1 > Attachments_DataCard1 > DataCardValue4
+STEP 3: Property dropdown: OnRemoveFile
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+        (If the properties are greyed out: click Attachments_DataCard1, right panel >
+        Advanced tab > "Unlock to change properties", then click DataCardValue4 again.)
+What this changes: on ONE part of a group, clicking X on a file is refused: the list goes back as
+it was saved, with a message. Normal queries and group edit: no change.
+---------------------------- BEFORE - CHANGE 3 ----------------------------
+(empty - this property is not set in the zip. Studio shows false or nothing.)
+---------------------------- AFTER - CHANGE 3 -----------------------------
+// One part of a group: files belong to the whole group, so they can't be removed here.
+// Reset puts the file list back as it was saved. Normal queries and group edit: no change.
+If(
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo) &&
+    !LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+    Reset(DataCardValue4);
+    Notify(
+        "Files are shared by the whole group and can't be removed from one part. The file list is back as it was saved. If you had picked new files, please pick them again.",
+        NotificationType.Warning,
+        8000
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 4 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container 3 > Form1
+STEP 3: Property dropdown: OnFailure
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: if saving fails (e.g. a file is too big) on a part already assigned to you, the
+error shows as before AND the "Assignment Confirmation" pop-up that Save opened is
+closed, so you are not stuck behind it.
+---------------------------- BEFORE - CHANGE 4 ----------------------------
+Notify(
+    Form1.Error,
+    NotificationType.Error
+)
+---------------------------- AFTER - CHANGE 4 -----------------------------
+Notify(
+    Form1.Error,
+    NotificationType.Error
+);
+// Saving stopped here (the files were not saved). On a part already assigned to you,
+// Save itself opened the "Assignment Confirmation" pop-up (to keep the tab open), so close
+// it. In the "Assign and Save" case it stays, as today, so you can retry or Close.
+If(
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName &&
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department,
+    Patch(
+        colOpenTabs,
+        LookUp(colOpenTabs, TabID = varActiveTabID),
+        {
+            showAutoAssignConfirmModal: false
+        }
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+- CHANGE 1: paste BEFORE - CHANGE 1 back into Form1 > DefaultMode.
+- CHANGE 2: paste BEFORE - CHANGE 2 back into btnSaveClose > OnSelect.
+- CHANGE 3: clear DataCardValue4 > OnRemoveFile (type false).
+- CHANGE 4: paste BEFORE - CHANGE 4 back into Form1 > OnFailure.
+- If you undo CHANGE 1, undo CHANGE 4 too (CHANGE 4 needs CHANGE 1).
+(If you unlocked Attachments_DataCard1 for CHANGE 3, it can stay unlocked.)
+
+TESTING (in dev)
+NOT TESTED YET.
+Impact check done: every BEFORE read from the 13 Nov zip and matches #14's BEFORE; AFTER
+differs only where described (diff checked: CHANGE 1 one 14-line block removed, CHANGE 2
+one line, CHANGE 4 one guarded Patch added); every reader of Form1, DataCardValue4,
+UploadAttachmentBtn, showAutoAssignConfirmModal and the message checked.
+Independent static review 2026-11-13: PASS WITH NOTES, no blockers (notes added above:
+CHANGE 4 needs CHANGE 1, lock note, extra steps in T1, T4, T10).
+After pasting: App Checker (top right) must show no new red errors on these controls.
+
+Use a TEST group of 3 parts (A = first query, B, C), assigned to you, your department.
+T1. Main case: B > Edit Form -> the attachment box lets you add files. No "Upload" button
+    (as before). Add a file, comment "attaching <file name>" -> Save -> "Record saved
+    successfully. Doc No: <A's Doc No>" and the tab STAYS open (existing) -> open A, B, C:
+    the file is on all of them; only B's history shows the comment. Add a 2nd file +
+    comment in the same tab -> Save -> both files on all parts. After the FIRST save, the
+    box shows file 1 as a saved file (not as a new pick); after the second save, file 1 is
+    NOT on the parts twice.
+T2. Not assigned: C assigned to someone else > Edit Form -> box view-only (as before).
+    "Assign to yourself" -> "Assign and Save" -> tab stays in edit -> box editable -> add a
+    file + comment -> Save -> file on all parts.
+T3. File only, no comment, on one part -> Save -> "No changes made. If you added files,
+    please add a comment describing them." -> nothing saved, the file is still in the box.
+    Add the comment -> Save works.
+T4. Remove on one part: click X on a saved file -> it comes back at once + the "Files are
+    shared by the whole group..." message shows ONCE. Comment -> Save -> open another part:
+    the file is still there. Then pick a new file and click X on an old one -> the list goes
+    back as saved (the new pick is cleared, as the message says). If a file is ever really
+    deleted this way, stop: do not publish.
+    Also: pick a new file, then click X on THAT new file. Write down what happens: either
+    only that file goes, or all new picks are cleared with the warning (matches the
+    message, acceptable).
+T5. Group edit (Edit whole group): add a file, X on a file -> works as before (no
+    message). Save with a comment -> as before.
+T6. Normal query (not in a group): add, Upload button, Save, X all work as before.
+T7. New Request: attach, remove, attach again, create -> as before.
+T8. Other department / view mode / closed query: box view-only (as before).
+T9. BEFORE PRODUCTION - browser Network tab (F12 > Network, filter "annotation" or
+    "$batch"): on B with 2 files, add 1 + comment -> Save -> the request creates ONE note
+    and deletes nothing. Send screenshots. If it rewrites all files, stop: do not publish.
+T10. Two users, same group: user 1 opens B in Edit Form, user 2 opens C in Edit Form at
+    the same time. User 1 adds a file + comment -> Save. Then user 2 (screen NOT refreshed)
+    saves with only a comment. Reopen: user 1's file is still there. Then user 2 adds a
+    file + comment -> Save -> both files there. Then: user 1 opens A (the first query) in
+    Edit Form, user 2 adds a file on B; both save -> all files still there. If any file
+    disappears, stop: do not publish.
+T11. Failed save (CHANGE 4): on B (assigned to you) pick a file bigger than the Dataverse
+    attachment limit (default 5 MB) or a blocked type (.exe) + comment -> Save -> red error,
+    the "Assignment Confirmation" pop-up does NOT stay, the file is still in the box. Remove
+    it (CHANGE 3 puts the list back), pick a small file -> Save works. Write down the error
+    text. (If the box refuses the file before Save, write that down too.)
+T12. Same failure via "Assign and Save" (part assigned to someone else): the pop-up stays
+    (as today) -> Close -> the tab works.
+T13. A (the first query) on its own, Edit Form: adding works; X is refused like T4.
+T14. Pick a file on one part (don't save), switch tab and back -> the pick is gone, NO
+    "Files are shared..." message (as today for every query).
+T15. Configuration Management user on one part: file + comment + Misses Tracker fields ->
+    Save works as before.
