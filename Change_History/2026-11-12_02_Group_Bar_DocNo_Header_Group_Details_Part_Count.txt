@@ -1,0 +1,583 @@
+CHANGE RECORD 02 - Group bar, Doc No header, group details: clean look + part count
+==============================================================================
+Record:     02
+Date:       2026-11-12
+Made by:    Nofil (with Claude Code)
+Type:       User feedback (look of group queries)
+Based on:   iQuery_Dev_12_Nov_20261113023644.zip (app v1.52, last saved 2026-11-12 02:02 UTC)
+            Includes Change_History 01. No other record changes these controls.
+Reference:  sandbox record #16 (Sandbox v2.4). Every BEFORE below was read again from the
+            12 Nov zip (they matched #16). New vs #16: the part count, wider bar and header,
+            "parts" wording in the group details.
+Status:     PENDING TEST - not yet tested in dev.
+            Independent static review 2026-11-12: PASS (all BEFORE values match the zip,
+            no circular references, valid property and column names). Not a runtime test.
+
+WHY
+- A query in a group only shows "Doc No. : <no>": users can't see it is part of a group
+  until they click Edit Form.
+- In edit mode the group banner is a pale yellow italic text with a run of spaces and a
+  bright yellow underlined "Click Here" button placed over the gap. It looks unfinished
+  and moves with screen size and zoom.
+- Nowhere outside group edit tells the user how many parts the group has.
+- Group details section (group edit only): table-like layout with navy lines; clicking
+  its header text opens/closes section 1 (Parts Detail) instead of this section.
+
+WHAT THE USER WILL SEE
+- View mode, group query:  Doc No: CM-0012-00045 (Part of group CM-0012-00043, 4 parts)
+- View mode, single query: Doc No: CM-0012-00045
+- Edit mode, one part:     [i] Part of group CM-0012-00043 (4 parts). Field changes apply to
+                           this query only; files are shared with the group. [Edit whole group]
+- Group edit:              [i] Group edit: your changes apply to all 4 parts in group CM-0012-00043.
+- Group details section:   "Group size: 4 parts" + one card per query (Doc No on brown strip,
+                           "P/N <part>" below), first query first.
+
+IMPACT / RISK
+- Look only + the group details section gets its own section number 9 (header text,
+  arrow, height, Expand All). Today it shares 8 with the Misses Tracker, and its header
+  text toggles section 1 (Parts Detail) by mistake.
+- NOT changed: Button9.OnSelect (group edit + lock checks), the Visible of the bar, icon,
+  button, PNQ_Header and Container30, saving, data, flows, other screens.
+- Nothing outside these controls reads them (checked with grep): Label41, Icon12, Button9,
+  PNQ_Header, Label45, Label45_3, Title7, Label46, Rectangle3 are read by no other control.
+  Gallery8 is read only by Label45_1, Label45_2, Rectangle3_1 (hidden by CHANGE 14-16).
+- Part count = CountRows(Filter(PNQ_Backlogs, BatchDocNo = <group no>)): the same formula
+  Label45_3 already uses (App Checker: no delegation warning). It runs only for group
+  queries (single queries: blank group no -> no data call), in view mode from PNQ_Header,
+  in edit mode from Label41. One small data call when a group tab is shown.
+- Old groups whose first query has a blank BatchDocNo (if any exist) count 1 too few. The
+  current create code gives every part the BatchDocNo, so only old data could be affected;
+  the existing group details count has the same limit.
+- Group sort column "cr7ba_documentnumber" = DocNo in PNQ_Backlogs (References/DataSources.json).
+- Section numbers: the Misses Tracker (Container_MissTracker) keeps 8. Both sections can show
+  at the same time (Configuration Management user, group edit, department changed away from
+  Configuration Management), so today the group details arrow also opens/closes the Misses
+  Tracker. With 9 they open/close separately. Number 9 is used nowhere else. New tabs open
+  with sections 1-6 (or 1) expanded, so the group details still start collapsed, as today.
+  Collapse All clears every number (works for 9 too); Expand All gets 9 added (CHANGE 17).
+- Doc No width 780 (view mode): the screen never gets narrower than 1366 px (app design
+  width 1366, Scale to fit off, screen/form Width not overridden), so the box (293-1073)
+  stays clear of the Days Aging timer (ends at 260) and Edit Form (starts at 1240). At
+  125% browser zoom the page scrolls sideways instead of getting narrower.
+- Defaults: where a BEFORE says "not set in the zip", the property is at Studio's default.
+  The default shown is the expected value; check what Studio shows before you paste and
+  note it here if it differs (needed for undo).
+
+THE CHANGE (17 changes, all on screen PartsQuerySystem)
+PART 1 = CHANGE 1-3 (group bar), PART 2 = CHANGE 4 (Doc No), PART 3 = CHANGE 5-17 (group details)
+Do CHANGE 5, 6, 7 and 17 in the same session: they move the group details to section 9 together.
+For every property: pick it in the property dropdown (top left), click in the formula bar,
+Ctrl+A, paste the AFTER value, press Enter (or click outside).
+
+==================== CHANGE 1 - Label41 (the group bar) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container10 > Label41
+        (inside the group Group2; open the arrow next to Container10 to see it)
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: one calm bar in the app's colours with a text that names the group and
+its number of parts. No more run of spaces.
+
+---------------------------- BEFORE - CHANGE 1 - Label41.Text --------------
+If(
+    LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+    "You are editing multiple iQueries together",
+    "This query belongs to a group of queries.                               to update details of all the queries of this group together."
+)
+---------------------------- AFTER - CHANGE 1 - Label41.Text ---------------
+With(
+    {_tab: LookUp(colOpenTabs, TabID = varActiveTabID)},
+    If(
+        IsBlank(_tab.batchDocNo) || !_tab.isEditing,
+        "",
+        With(
+            {
+                _parts: CountRows(
+                    Filter(
+                        PNQ_Backlogs,
+                        BatchDocNo = LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo
+                    )
+                )
+            },
+            If(
+                _tab.isBatchEditing,
+                "Group edit: your changes apply to all " & _parts & " parts in group " &
+                    _tab.batchDocNo & ".",
+                "Part of group " & _tab.batchDocNo & " (" & _parts & " parts)" &
+                    ". Field changes apply to this query only; files are shared with the group."
+            )
+        )
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+Simple properties of Label41 (BEFORE -> AFTER):
+  X                : 381                                   -> 200
+  Y                : not set in the zip (default 0)        -> 1
+  Width            : 741                                   -> Min(1100, Parent.Width - Self.X - 20)
+  Height           : 30                                    -> 28
+  Fill             : RGBA(255, 247, 214, 1)                -> RGBA(246, 241, 235, 1)
+  BorderColor      : RGBA(0, 89, 178, 1)                   -> RGBA(211, 196, 173, 1)
+  BorderThickness  : not set in the zip (default 0)        -> 1
+  Italic           : true                                  -> false
+  Size             : 10                                    -> 11
+  FontWeight       : not set in the zip (default FontWeight.Normal) -> FontWeight.Semibold
+  PaddingLeft      : not set in the zip (default 5)        -> 36
+  PaddingRight     : not set in the zip (default 5)        -> If(Button9.Visible, Button9.Width + 12, 10)
+  Wrap             : not set in the zip (default true)     -> false
+Unchanged: Color RGBA(32, 32, 32, 1), Font, Visible.
+
+==================== CHANGE 2 - Icon12 (icon in the bar) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container10 > Icon12
+        (inside the group Group2)
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: a small brown "information" icon inside the left end of the bar
+(was a warning triangle outside it).
+
+Icon12 (BEFORE -> AFTER):
+  Icon        : Icon.Warning                        -> Icon.Information
+  Color       : RGBA(32, 32, 32, 1)                 -> RGBA(137, 103, 74, 1)
+  Fill        : RGBA(255, 247, 214, 1)              -> RGBA(0, 0, 0, 0)
+  Width       : 28                                  -> 18
+  Height      : 28                                  -> 18
+  X           : 359                                 -> Label41.X + 11
+  Y           : 1                                   -> Label41.Y + (Label41.Height - Self.Height) / 2
+  HoverColor  : not set in the zip (default ColorFade(Self.Color, 20%)) -> Self.Color
+Unchanged: Visible.
+
+==================== CHANGE 3 - Button9 ("Click Here" -> "Edit whole group") ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container10 > Button9
+        (inside the group Group2)
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+        DO NOT touch OnSelect or Visible.
+What this changes: a proper brown button at the right end of the bar.
+
+Button9 (BEFORE -> AFTER):
+  Text              : "Click Here"                     -> "Edit whole group"
+  Fill              : RGBA(243, 203, 2, 1)             -> RGBA(137, 103, 74, 1)
+  Color             : RGBA(32, 32, 32, 1)              -> RGBA(255, 255, 255, 1)
+  HoverColor        : RGBA(199, 178, 137, 1)           -> RGBA(255, 255, 255, 1)
+  Underline         : true                             -> false
+  Size              : 12                               -> 11
+  FontWeight        : not set in the zip (default FontWeight.Semibold) -> FontWeight.Semibold
+  Width             : 97                               -> 140
+  Height            : 30                               -> 22
+  X                 : 626                              -> Label41.X + Label41.Width - Self.Width - 4
+  Y                 : not set in the zip (default 0)   -> Label41.Y + (Label41.Height - Self.Height) / 2
+  RadiusTopLeft     : not set in the zip (default 10)  -> 4
+  RadiusTopRight    : not set in the zip (default 10)  -> 4
+  RadiusBottomLeft  : not set in the zip (default 10)  -> 4
+  RadiusBottomRight : not set in the zip (default 10)  -> 4
+Unchanged: OnSelect, Visible, BorderColor (ColorFade(Self.Fill, -15%)), HoverFill
+(ColorFade(Self.Fill, -20%)), padding 0.
+
+==================== CHANGE 4 - PNQ_Header (Doc No at the top) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > PNQ_Header
+        (a modern Text control, near the bottom of New Query Form Container's list)
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: Doc No not italic, bigger, dark, one line, level with "Days Aging".
+In view mode a group query also shows "(Part of group <no>, <n> parts)".
+
+---------------------------- BEFORE - CHANGE 4 - PNQ_Header.Text -----------
+"Doc No. : "&
+LookUp(
+    colOpenTabs,
+    TabID = varActiveTabID
+).DocNo
+---------------------------- AFTER - CHANGE 4 - PNQ_Header.Text ------------
+With(
+    {_tab: LookUp(colOpenTabs, TabID = varActiveTabID)},
+    "Doc No: " & _tab.DocNo &
+    If(
+        !IsBlank(_tab.batchDocNo) && !_tab.isEditing,
+        " (Part of group " & _tab.batchDocNo & ", " &
+            CountRows(
+                Filter(
+                    PNQ_Backlogs,
+                    BatchDocNo = LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo
+                )
+            ) & " parts)",
+        ""
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+Simple properties of PNQ_Header (BEFORE -> AFTER):
+  Italic        : true                                       -> false
+  Size          : 12                                         -> 14
+  Color         : not set in the zip (modern theme text colour) -> RGBA(32, 32, 32, 1)
+  Width         : 192                                        -> If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing, 300, 780)
+  Align         : Align.Center                               -> If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing, Align.Right, Align.Center)
+  Y             : 12                                         -> 4
+  PaddingTop    : not set in the zip (default 5)             -> 0
+  PaddingBottom : not set in the zip (default 5)             -> 0
+  Wrap          : not set in the zip (default true)          -> false
+Unchanged: X, Visible, FontWeight (Semibold), Font.
+
+==================== CHANGE 5 - Container30 (group details section) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: the section is shorter when open (cards instead of a tall table).
+
+---------------------------- BEFORE - CHANGE 5 - Container30.Height --------
+If(8 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 210, 30)
+---------------------------- AFTER - CHANGE 5 - Container30.Height ---------
+If(9 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 140, 30)
+---------------------------- END OF AFTER ----------------------------------
+  LayoutMinHeight : 210 -> 30
+
+==================== CHANGE 6 - Label14_6 (section header text) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Container13_6 > Label14_6
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: header reads "iQueries group details"; clicking it opens/closes THIS
+section, number 9 (it used section 1 "Parts Detail" by mistake).
+
+  Text : "iQueries Group detail" -> "iQueries group details"
+
+---------------------------- BEFORE - CHANGE 6 - Label14_6.OnSelect --------
+With(
+    {
+        tabRow: LookUp(colOpenTabs, TabID = varActiveTabID)
+    },
+    If(
+        1 in tabRow.ExpandedSections.Index,
+
+        // COLLAPSE
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Filter(tabRow.ExpandedSections, Index <> 1)
+            }
+        ),
+
+        // EXPAND
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Collect(tabRow.ExpandedSections, {Index: 1})
+            }
+        )
+    )
+);
+---------------------------- AFTER - CHANGE 6 - Label14_6.OnSelect ---------
+With(
+    {
+        tabRow: LookUp(colOpenTabs, TabID = varActiveTabID)
+    },
+    If(
+        9 in tabRow.ExpandedSections.Index,
+
+        // COLLAPSE
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Filter(tabRow.ExpandedSections, Index <> 9)
+            }
+        ),
+
+        // EXPAND
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Collect(tabRow.ExpandedSections, {Index: 9})
+            }
+        )
+    )
+);
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 7 - Icon5_8 (section arrow) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Container13_6 > Icon5_8
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: the arrow opens/closes section 9 (not 8, which the Misses Tracker uses).
+
+---------------------------- BEFORE - CHANGE 7 - Icon5_8.OnSelect ----------
+With(
+    {
+        tabRow: LookUp(colOpenTabs, TabID = varActiveTabID)
+    },
+    If(
+        8 in tabRow.ExpandedSections.Index,
+
+        // COLLAPSE
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Filter(tabRow.ExpandedSections, Index <> 8)
+            }
+        ),
+
+        // EXPAND
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Collect(tabRow.ExpandedSections, {Index: 8})
+            }
+        )
+    )
+);
+---------------------------- AFTER - CHANGE 7 - Icon5_8.OnSelect -----------
+With(
+    {
+        tabRow: LookUp(colOpenTabs, TabID = varActiveTabID)
+    },
+    If(
+        9 in tabRow.ExpandedSections.Index,
+
+        // COLLAPSE
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Filter(tabRow.ExpandedSections, Index <> 9)
+            }
+        ),
+
+        // EXPAND
+        Patch(
+            colOpenTabs,
+            tabRow,
+            {
+                ExpandedSections:
+                    Collect(tabRow.ExpandedSections, {Index: 9})
+            }
+        )
+    )
+);
+---------------------------- END OF AFTER ----------------------------------
+
+---------------------------- BEFORE - CHANGE 7 - Icon5_8.Rotation ----------
+If(8 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 90, 0)
+---------------------------- AFTER - CHANGE 7 - Icon5_8.Rotation -----------
+If(9 in LookUp(colOpenTabs, TabID = varActiveTabID).ExpandedSections.Index, 90, 0)
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 8 - Label45 ("Group quantity:") ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Label45
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: "Group size:" in small grey text.
+
+Label45 (BEFORE -> AFTER):
+  Text   : "Group quantity:"                            -> "Group size:"
+  Y      : 30                                           -> 34
+  Width  : not set in the zip (default 150)             -> 100
+  Height : not set in the zip (default 40)              -> 26
+  Size   : not set in the zip (default 13)              -> 11
+  Color  : not set in the zip (default, check in Studio) -> RGBA(96, 94, 92, 1)
+  Wrap   : not set in the zip (default true)            -> false
+
+==================== CHANGE 9 - Label45_3 (the count) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Label45_3
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: "4 parts" in dark semibold right after "Group size:". Same count formula.
+
+---------------------------- BEFORE - CHANGE 9 - Label45_3.Text ------------
+If(!IsBlank(LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo),
+    CountRows(Filter(PNQ_Backlogs, BatchDocNo = LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo))&" queries.")
+---------------------------- AFTER - CHANGE 9 - Label45_3.Text -------------
+If(!IsBlank(LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo),
+    CountRows(Filter(PNQ_Backlogs, BatchDocNo = LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo))&" parts")
+---------------------------- END OF AFTER ----------------------------------
+
+Label45_3 (BEFORE -> AFTER):
+  X          : 160                                         -> Label45.X + Label45.Width
+  Y          : 30                                          -> 34
+  Width      : not set in the zip (default 150)            -> 200
+  Height     : not set in the zip (default 40)             -> 26
+  Size       : not set in the zip (default 13)             -> 11
+  FontWeight : not set in the zip (default FontWeight.Normal) -> FontWeight.Semibold
+  Color      : not set in the zip (default, check in Studio) -> RGBA(32, 32, 32, 1)
+
+==================== CHANGE 10 - Gallery8 (the list of queries) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Gallery8
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: cards sorted by Doc No (first query first), starting at the left edge,
+190 px each with a small gap. Same filter (same queries).
+
+---------------------------- BEFORE - CHANGE 10 - Gallery8.Items -----------
+Filter(PNQ_Backlogs, BatchDocNo = LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo)
+---------------------------- AFTER - CHANGE 10 - Gallery8.Items ------------
+SortByColumns(
+    Filter(PNQ_Backlogs, BatchDocNo = LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo),
+    "cr7ba_documentnumber",
+    SortOrder.Ascending
+)
+---------------------------- END OF AFTER ----------------------------------
+
+Gallery8 (BEFORE -> AFTER):
+  X               : 185                                 -> 25
+  Y               : 70                                  -> 64
+  Width           : Parent.Width-200                    -> Parent.Width - 50
+  Height          : 122                                 -> 62
+  TemplateSize    : 126                                 -> 190
+  TemplatePadding : not set in the zip (default 0)      -> 4
+
+==================== CHANGE 11 - Title7 (Doc No strip on each card) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Gallery8 > Title7
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: brown strip with the Doc No in white semibold, left-aligned, no black border.
+
+Title7 (BEFORE -> AFTER):
+  Y               : 1                                   -> 0
+  Height          : Parent.TemplateHeight*0.33          -> 24
+  BorderThickness : 1                                   -> 0
+  Align           : Align.Center                        -> Align.Left
+  PaddingLeft     : 0                                   -> 10
+  FontWeight      : not set in the zip (default FontWeight.Normal) -> FontWeight.Semibold
+  Size            : 10                                  -> 11
+
+==================== CHANGE 12 - Label46 (part number on each card) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Gallery8 > Label46
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: "P/N <part number>" in dark text on warm off-white, left-aligned, one line.
+
+Label46 (BEFORE -> AFTER):
+  Text            : ThisItem.PartNumber                 -> "P/N " & ThisItem.PartNumber
+  Y               : Parent.TemplateHeight*0.33          -> 24
+  Width           : 126                                 -> Parent.TemplateWidth
+  Height          : Parent.TemplateHeight*0.67          -> Parent.TemplateHeight - 24
+  Fill            : RGBA(199, 178, 137, 1)              -> RGBA(246, 241, 235, 1)
+  Color           : not set in the zip (default, check in Studio) -> RGBA(32, 32, 32, 1)
+  BorderThickness : 1                                   -> 0
+  Align           : Align.Center                        -> Align.Left
+  PaddingLeft     : 0                                   -> 10
+  Size            : 10                                  -> 11
+  Wrap            : not set in the zip (default true)   -> false
+
+==================== CHANGE 13 - Rectangle3 (card frame) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Gallery8 > Rectangle3
+STEP 3: For EACH property below: property dropdown -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: was the navy line between cells; now a beige 1 px frame around each card,
+transparent inside.
+
+Rectangle3 (BEFORE -> AFTER):
+  X               : Parent.TemplateWidth-1              -> 0
+  Width           : 1                                   -> Parent.TemplateWidth
+  Fill            : RGBA(0, 51, 102, 1)                 -> RGBA(0, 0, 0, 0)
+  BorderColor     : RGBA(0, 89, 178, 1)                 -> RGBA(211, 196, 173, 1)
+  BorderThickness : not set in the zip (default 0)      -> 1
+
+==================== CHANGE 14 - Label45_1 (old row label "Doc No") ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Label45_1
+STEP 3: Property dropdown: Visible -> Ctrl+A -> paste AFTER.
+  Visible : not set in the zip (default true) -> false
+
+==================== CHANGE 15 - Label45_2 (old row label "Part Number") ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Label45_2
+STEP 3: Property dropdown: Visible -> Ctrl+A -> paste AFTER.
+  Visible : not set in the zip (default true) -> false
+
+==================== CHANGE 16 - Rectangle3_1 (old navy line on the left) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container30 > Rectangle3_1
+STEP 3: Property dropdown: Visible -> Ctrl+A -> paste AFTER.
+  Visible : not set in the zip (default true) -> false
+
+==================== CHANGE 17 - expandIcon ("Expand All" +) ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer > Container10 > expandIcon
+        (the + icon left of "Expand All"; it only shows when every section is closed)
+STEP 3: Property dropdown: OnSelect -> formula bar -> Ctrl+A -> paste AFTER.
+What this changes: "Expand All" also opens the group details (section 9), as it did with 8.
+
+---------------------------- BEFORE - CHANGE 17 - expandIcon.OnSelect ------
+Patch(
+    colOpenTabs,
+    LookUp(colOpenTabs, TabID = varActiveTabID),
+    {
+        ExpandedSections:
+            ForAll(
+                [1,2,3,4,5,6,7,8],
+                {Index: Value}
+            )
+    }
+)
+---------------------------- AFTER - CHANGE 17 - expandIcon.OnSelect -------
+Patch(
+    colOpenTabs,
+    LookUp(colOpenTabs, TabID = varActiveTabID),
+    {
+        ExpandedSections:
+            ForAll(
+                [1,2,3,4,5,6,7,8,9],
+                {Index: Value}
+            )
+    }
+)
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+Paste each BEFORE value back into its property. "Not set in the zip" = paste the default
+shown (or what Studio showed before the change). PNQ_Header.Color: delete the formula and
+press Enter; if Studio does not accept that, keep RGBA(32, 32, 32, 1).
+
+TESTING (in dev)
+NOT TESTED YET.
+After pasting: App Checker (top right) must show no new red errors.
+Group bar (edit mode):
+T1. One part of a group, Edit Form: bar "Part of group <no> (<n> parts). Field changes apply
+    to this query only; files are shared with the group." Semibold dark text, brown info
+    icon left, brown "Edit whole group" button right, all inside one beige bar, centred.
+    The text does not run under the button. <n> = real number of parts in the group.
+T2. Click "Edit whole group" -> group mode starts exactly as before (same lock checks).
+T3. Group mode: bar "Group edit: your changes apply to all <n> parts in group <no>.", no button.
+T4. Single query and view mode: no bar (as before).
+T5. Smaller window (about 1366 px) and 125% zoom: bar text on one line, not cut. Use a
+    group with a long Doc No and 10+ parts if you have one (the review estimates the text
+    at about 800-870 px of the 912 px space). If it is cut: set Label41.Size to 10.
+    Also check the bar ends about 36 px from the right edge (Container10 fills the row).
+T6. "Collapse all / Expand all" still works, not covered.
+T7. Someone else holds a part: "Edit whole group" -> same "being edited by" message as before.
+Doc No header:
+T8. View mode, group query: centred "Doc No: <no> (Part of group <group no>, <n> parts)".
+T9. View mode, single query: "Doc No: <no>" only.
+T10. View mode, FIRST query of a group: shows its own no as the group no.
+T11. Edit mode, one part of a group: "Doc No: <no>" on the right, no bracket.
+T12. Group edit: Doc No hidden (as before). New Request: "Doc No: <new no>" on the right.
+T13. Smaller window / 125% zoom: one line, not overlapping "Days Aging" or "Edit Form".
+T14. A Closed group query in view mode: still centred, shows the group.
+Group details (group edit):
+T15. "Group size: <n> parts" and one card per query (brown strip Doc No, "P/N ..." below,
+     beige frame). No row labels, no navy lines. Same queries as before, first query first.
+T16. Click the header TEXT -> this section opens/closes (not Parts Detail). The arrow does
+     the same and turns (right when closed, down when open).
+T17. Collapsed: 30 px bar. Expanded: nothing cut at the bottom of the cards.
+T18. A group with 8+ parts: cards scroll sideways; scroll bar does not cover "P/N" (note it).
+T19. Long part number: one line, cut at the end if too long.
+T20. Other sections (Parts Detail, Attachments, ...) unchanged.
+T21. The count is the same in the Doc No header, the bar and the group details.
+Section numbers (CHANGE 5, 6, 7, 17):
+T22. Configuration Management user, group edit, change the department away from Configuration
+     Management (Misses Tracker appears): toggling the group details (text and arrow) does
+     NOT open/close the Misses Tracker, and the Misses Tracker arrow does NOT toggle the
+     group details. Parts Detail is not affected either.
+T23. Group edit with all sections closed -> "Expand All" opens every section incl. group
+     details; "Collapse All" closes them all.
+T24. Misses Tracker on a one-part edit (no group details): opens/closes as before; saving with
+     an incomplete Fail is still blocked as before.
