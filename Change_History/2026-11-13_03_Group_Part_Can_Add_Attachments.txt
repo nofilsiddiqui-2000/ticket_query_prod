@@ -17,6 +17,11 @@ Status:     PENDING TEST - not yet tested in dev.
             cases change). Not a runtime test.
             CHANGE 5-8 (bigger file box) added 2026-11-13 after that review; their BEFORE
             values and the controls below the box were checked against the zip.
+            2026-11-13: applied in dev. Export iQuery_Dev_153_20261113174127.zip (last
+            saved 2026-11-13 17:35 UTC): all 8 AFTER values match this record exactly, and
+            no other control property changed vs the 05:09 export. App Checker: same 873
+            items, nothing new. Records 01 and 02 still in the export. Nofil: preliminary
+            check in the published dev app showed no issues (full test list not run yet).
 
 WHY
 - Files are stored once per group, on the FIRST query of the group (Form1.Item uses the
