@@ -16,6 +16,12 @@ Status:     PENDING TEST - not yet tested in dev.
             asking for a write-success check (IfError) before the tab closes. Not added here,
             see IMPACT / RISK. Agreed with Nofil: save error handling will be its own change
             after this one is tested.
+            Independent static review 3 (2026-11-15, subagent, before pasting): SAFE WITH
+            NOTES, no blockers. It built the app with both AFTER blocks pasted in. AFTER is the
+            same as BEFORE except for the 2 intended edits, the brackets and comments balance,
+            nothing still uses what was removed, no new Dataverse call or delegation risk, and
+            it predicts no new App Checker item. Every save path was walked through. Its 3
+            missing tests were added (T17-T19).
             Not a runtime test.
 
 WHY
@@ -2404,3 +2410,13 @@ T14 Two tabs open (query X and part B): save B -> home list. X is still in the t
 T15 New Request -> pick YOURSELF in Assigned To -> "Assignment Confirmation" pop-up ->
     "Assign and Save" -> home list. The query is created ONCE (search its Doc No).
 T16 After T1, open another existing query and click Edit Form: the comment box is empty.
+T17 Failed file save on one part (a file over the size limit or a blocked file type) + comment
+    + Save -> red error, you stay in edit, and NO "Assignment Confirmation" pop-up appears.
+T18 Configuration Management user, one part of a group that is in CM: move it out of CM,
+    fill Pass/Fail (and the fail reason if Fail), comment, Save -> home list. Exactly one
+    new iQuery_MissesTrackers row for that Doc No. Next query: Pass/Fail fields are empty.
+T19 "Assign and Save" on a query that isn't yours, with a file that fails to upload -> red
+    error, the "Assignment Confirmation" pop-up stays open (as before), nothing else saved.
+Known, not changed: during a file upload the screen can be clicked (the loader is turned off
+right after SubmitForm). Don't switch tabs until the "saved successfully" message shows. That
+was already true for single queries, whole groups and New Requests.
