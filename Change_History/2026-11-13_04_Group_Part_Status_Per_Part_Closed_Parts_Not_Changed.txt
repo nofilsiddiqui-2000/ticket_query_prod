@@ -37,6 +37,15 @@ Status:     PENDING TEST - not yet tested in dev.
             varActiveTabID).batchDocNo: no warning, correct (21). Fix: the Closed count uses
             that same expression. HiddenSaveButton and Button9 never used _tab and have no
             delegation warning in this export (same App Checker items as before record 04).
+            Correction 2 REPLACES correction 1's explanation: the cause was _tab.batchDocNo in
+            Label41 only. The 13 Nov group save and Button9 filters used varBatchRootDocNo and
+            were most likely fine. Correction 1's code (CHANGE 3, 4) is correct and stays, but
+            its code comments ("asking Dataverse for not Closed ... returned only some of the
+            open parts") are inaccurate; fix them only if those properties are pasted again.
+            Independent static review 3 (2026-11-15) of correction 2 against the 154_3 export:
+            PASS WITH NOTES, no blockers (cause confirmed from App Checker; the new expression
+            is used without warning in _parts, Gallery8, Label45_3 and PNQ_Header; no other
+            With-record field is used in a Dataverse filter anywhere in the app).
 
 WHY
 - When you click Edit Form on ONE part of a group, the grey cover Container31 lies over the
@@ -120,8 +129,14 @@ IMPACT / RISK
 - Dataverse is asked only "BatchDocNo = group" (same filter as the group details cards and the
   part count since record 02) and, for the bar, "BatchDocNo = group, Status = Closed" (same
   "Status = Closed" form as the list filters). The "not Closed" check runs in the app: RemoveIf
-  on colGroupOpenParts (group save) and an If inside Button9's loop. No "Status <> Closed"
-  query is sent to Dataverse (see the 2026-11-15 correction in Status).
+  on colGroupOpenParts (group save) and an If inside Button9's loop. (A "Status <> Closed"
+  query with a plain value also works - the real problem was _tab.batchDocNo, see Status.)
+- Never use a field of a With record (like _tab.batchDocNo) as the value in a Filter / LookUp /
+  CountRows on PNQ_Backlogs: Power Apps can't send it to Dataverse (delegation warning) and
+  only checks the first rows of the table. Use LookUp(colOpenTabs, TabID = varActiveTabID)...
+  or a variable instead.
+- Group save speed: about 6 Dataverse calls per open part (find + update on PNQ_Backlogs, on
+  Query_Details, and the history comment), so a 20-part group makes ~120 calls in a row.
 - Review 2 points, NOT fixed (rare or same as today), recorded so we can decide later:
   1. A part closed by another user DURING the few seconds of the group save still gets this
      save's fields/history/Misses Tracker row (and Status, if changed). A part closed any time
@@ -2378,7 +2393,12 @@ RGBA(32, 32, 32, 1)
 If(ThisItem.'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed, RGBA(128, 128, 128, 1), RGBA(32, 32, 32, 1))
 ---------------------------- END OF AFTER ----------------------------------
 
-After the last change: App Checker (top right, stethoscope icon) must show no new error.
+After the last change: App Checker (top right, stethoscope icon) must show no new error, AND
+under Performance no delegation warning on Label41.Text, HiddenSaveButton.OnSelect or
+Button9.OnSelect (delegation problems are warnings, not errors - that is how the
+_tab.batchDocNo problem got through).
+Delete the temporary test label PartsQuerySystem > count_debug_label (Tree view, right-click >
+Delete). It is visible to everyone and runs a delegation-warning query. Nothing uses it.
 
 HOW TO UNDO
 - CHANGE 8 to 3, 1: paste the BEFORE of that change back into the same property.
@@ -2452,4 +2472,5 @@ T20. (2026-11-15 correction) Large group: the 21-part group with 1 closed part. 
      "... apply to 20 of 21 parts ... Closed parts (1) ...". Change Priority + comment > Save:
      the message lists 20 Doc Nos; check the first, a middle and the last part: new Priority +
      comment; the closed part unchanged. Close a 2nd part on its own -> bar says 19 of 21,
-     Closed parts (2). Delete the temporary test label before testing.
+     Closed parts (2). Write down how long the 20-part group save takes (T15 only covers 5-10
+     parts). count_debug_label must be deleted before testing.
