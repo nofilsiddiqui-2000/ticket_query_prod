@@ -17,6 +17,12 @@ Status:     PENDING TEST - not yet tested in dev.
             Icon12.HoverColor (not set in the export, still the default
             ColorFade(Self.Color, 20%)). Label41.Text AFTER corrected to the text used in
             dev ("this iQuery only"). No other control changed.
+            2026-11-15: in export iQuery_Dev_154_4_20261115054503.zip (last saved 05:41 UTC) all
+            AFTER values of this record are present, except Label41.Text, which record 04 replaced
+            (intended), and Icon12.HoverColor, still not set (same as noted above; the icon only
+            changes colour on hover). Published to the TEST environment on 2026-11-15 together
+            with records 03 and 04. Nofil tested it: no issues reported. Testing by other users ongoing.
+            Not yet in production.
 
 WHY
 - A query in a group only shows "Doc No. : <no>": users can't see it is part of a group

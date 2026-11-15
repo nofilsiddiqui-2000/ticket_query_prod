@@ -22,6 +22,10 @@ Status:     PENDING TEST - not yet tested in dev.
             no other control property changed vs the 05:09 export. App Checker: same 873
             items, nothing new. Records 01 and 02 still in the export. Nofil: preliminary
             check in the published dev app showed no issues (full test list not run yet).
+            2026-11-15: in export iQuery_Dev_154_4_20261115054503.zip (last saved 05:41 UTC) all 8
+            AFTER values match. Published to the TEST environment on 2026-11-15 together with
+            records 02 and 04. Nofil tested it: no issues reported. Testing by other users
+            ongoing. Not yet in production.
 
 WHY
 - Files are stored once per group, on the FIRST query of the group (Form1.Item uses the

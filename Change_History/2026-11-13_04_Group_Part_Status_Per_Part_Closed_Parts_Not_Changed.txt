@@ -46,6 +46,14 @@ Status:     PENDING TEST - not yet tested in dev.
             PASS WITH NOTES, no blockers (cause confirmed from App Checker; the new expression
             is used without warning in _parts, Gallery8, Label45_3 and PNQ_Header; no other
             With-record field is used in a Dataverse filter anywhere in the app).
+            2026-11-15: correction 2 applied in dev and count_debug_label deleted. Export
+            iQuery_Dev_154_4_20261115054503.zip (last saved 05:41 UTC): all 8 changes match this
+            record (incl. both corrections; lblStatus/cmbStatus in front of Container31). Only
+            record 04's 7 properties differ from the pre-record-04 export; App Checker identical to
+            it (873 items), no delegation warning on any changed control. Published to the TEST
+            environment on 2026-11-15 together with records 02 and 03. Nofil tested it and it
+            works (bar now correct); T1-T20 results not recorded one by one. Testing by other
+            users ongoing. Not yet in production.
 
 WHY
 - When you click Edit Form on ONE part of a group, the grey cover Container31 lies over the
