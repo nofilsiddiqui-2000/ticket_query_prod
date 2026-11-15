@@ -1,0 +1,2406 @@
+CHANGE RECORD 05 - Every successful Save leaves edit mode (one part of a group, Assign and Save)
+==============================================================================
+Record:     05
+Date:       2026-11-15
+Made by:    Nofil (with Claude Code)
+Type:       Bug fix (saving)
+Based on:   iQuery_Dev_154_4_20261115054503.zip (last saved 2026-11-15 05:41 UTC).
+            Includes Change_History 01-04 (02, 03 and 04 are in the TEST environment).
+            Both BEFORE blocks below were copied from this zip by script. Record 04 CHANGE 3
+            also changed HiddenSaveButton.OnSelect: its AFTER is this record's BEFORE - CHANGE 2.
+Status:     PENDING TEST - not yet tested in dev.
+            Independent static review 1 (2026-11-15, subagent): PASS WITH NOTES. The notes
+            were added (validation is skipped on "Assign and Save", which is existing
+            behaviour; New Request + pick yourself; comment-box test).
+            Independent static review 2 (2026-11-15, Nofil's reviewer): "CHANGES REQUIRED",
+            asking for a write-success check (IfError) before the tab closes. Not added here,
+            see IMPACT / RISK. Agreed with Nofil: save error handling will be its own change
+            after this one is tested.
+            Not a runtime test.
+
+WHY
+- Reported (Nofil, 2026-11-15): "Edit whole group" + comment + Save goes back to the home
+  list, but Edit Form on ONE part of a group + comment + Save keeps you on the query in edit
+  mode. Every successful Save should leave edit mode.
+- Cause: at the end of HiddenSaveButton.OnSelect the tab is closed UNLESS the flag
+  showAutoAssignConfirmModal is on (and the query is yours, and Status isn't Closed).
+  btnSaveClose.OnSelect turns that flag on for one part of a group that is yours,
+  "// to stay on the same screen". The block is in every export we have, back to the oldest
+  (last saved 2026-11-04, prod v1.51), so it is the main developer's design, not ours.
+- The same flag is set by "Assign to yourself" (or by picking yourself in Assigned To), and
+  it is also what shows the "Assignment Confirmation" pop-up. So "Assign and Save" also kept
+  the tab open in edit (single query, one part, whole group, and a New Request where you
+  picked yourself). Nofil chose (2026-11-15) that this should close too.
+- Staying open was also risky: the save had already released the edit lock (someone else
+  could open Edit Form on the same part), and the comment box isn't cleared, so a second
+  Save would post the same comment again.
+
+IMPACT / RISK
+- Only what happens AFTER a successful save changes. Validation, the "please add a comment"
+  rules, all database writes, comments, Misses Tracker, files and the refresh are unchanged.
+- One part of a group (yours): Save -> saved -> home list (was: stayed in edit).
+- "Assign to yourself" -> "Assign and Save" (single, one part, whole group, New Request where
+  you picked yourself): saved -> home list (was: stayed in edit). To keep working on it,
+  open it again and click Edit Form.
+- Single query, whole group, normal New Request, Status Closed, reassigned to someone else:
+  already closed, still close.
+- On one part of a group, the "Assignment Confirmation" pop-up no longer appears during the
+  save (CHANGE 1). That flag was on while the files uploaded, so the pop-up and its
+  "Assign and Save" button were most likely visible on a part that is already yours.
+- Form1.DefaultMode: unchanged. A query that is yours is in Edit. For "Assign and Save" the
+  flag is still on during SubmitForm (set by "Assign to yourself"), as before, so files
+  still save.
+- Form1.OnFailure (record 03 CHANGE 4): not changed. On one part the flag is now already
+  off, so its Patch does nothing there. Its code comment ("Save itself opened the pop-up")
+  is now out of date (cosmetic only, left alone).
+- The record 04 condition 'Text(cmbStatus.Selected.Value) = "Closed"' goes away with the If.
+  A Closed save closes the tab like every other save now.
+- Existing, not changed: on "Assign and Save" for a query that isn't yours, btnSaveClose
+  doesn't show validation errors and saves anyway (for example a field changed without a
+  reason). The only difference now is that the tab closes afterwards.
+- Existing, not changed (record 04 known limit 2): no error handling on the database writes.
+  If a write fails, Power Apps shows its red error banner, but "Record saved successfully"
+  still shows. Single query, whole group and New Request already closed the tab after a
+  failed write. Now one part and "Assign and Save" do too. Before, staying open there didn't
+  help either: the app had already treated the save as done (values copied, changed-fields
+  list emptied, lock released). Error handling is planned as its own change.
+- No new data calls -> no new delegation warnings. Callers checked: Save (btnSaveClose),
+  "Assign and Save" (AutoAssign_Save_Button) and "Save & Close Request" (Close_Button_4) all
+  go through btnSaveClose. Form1.OnSuccess is the only Select(HiddenSaveButton).
+  UploadAttachmentBtn's SubmitForm doesn't run HiddenSaveButton (uploadButtonClicked).
+
+THE CHANGE (2 changes, both on screen PartsQuerySystem, do them in order, same session)
+
+==================== CHANGE 1 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > btnSaveClose
+STEP 3: Property dropdown: OnSelect
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: Save no longer opens the "Assignment Confirmation" pop-up on one part of a
+group to keep the tab open (the If( And(...), Patch(...showAutoAssignConfirmModal: true...) )
+block right under "// Step to Prepare a batch queue..." is removed). Nothing else changes.
+---------------------------- BEFORE - CHANGE 1 ----------------------------
+Set(showLoader, true);
+Set(varValidationError, Blank());
+
+If(
+    (!IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) && LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName &&
+    selectAssignedTo.Selected.Person <> varUser.FullName),
+    Set(varValidationError, "You need to assign the query to yourself first"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, "Please select an Aircraft Type"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, "Please select an Aircraft Model"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && !IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)&" Aircraft Model do not exist anymore"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)&" Aircraft Type do not exist anymore"),
+
+    IsBlank(selectAssignedDept.Selected.Value),
+    Set(varValidationError, "Please select an Assigned Department"),
+
+    IsBlank(txtNumParts.Text),
+    Set(varValidationError, "Please enter number of parts"),
+
+    IsBlank(txtOriginator.Text),
+    Set(varValidationError, "Please enter Originator"),
+
+    IsBlank(txtOriginatorDept.Text),
+    Set(varValidationError, "Please enter Originator Department"),
+
+    IsBlank(cmbPriority.Selected.Value),
+    Set(varValidationError, "Please select Priority"),
+
+    IsBlank(cmbStatus.Selected.Value),
+    Set(varValidationError, "Please select Status"),
+
+    IsBlank(pnqSubject.Selected.Value),
+    Set(varValidationError, "Please select Subject"),
+
+    IsBlank(dtpNeedDate.SelectedDate),
+    Set(varValidationError, "Please select Need Date"),
+
+    IsBlank(selectAssignedTo.Selected),
+    Set(varValidationError, "Please assign the PNQ to a user"),
+    
+    LookUp(colOpenTabs, TabID = varActiveTabID).isIncorrectASN,
+    Set(varValidationError, "Please enter correct Aircraft Serial Number"),
+
+    cmbPriority.Selected.Value = 'Priority (PNQ_Backlogs)'.AOG && IsBlank(txtAircraftSerial.Text),
+    Set(varValidationError, "Aircraft Serial Number is required for AOG requests"),
+
+    IsBlank(txtQueryDesc.Text),
+    Set(varValidationError, "Please enter Query Description"),
+
+    Len(RichTextEditor_Pasted_Attachment.HtmlText) > 1048500,
+    Set(varValidationError, "Attachment size exceeds maximum allowed limit"),
+
+    (If(Text(cmbPriority.Selected.Value) = "AOG" || Text(cmbPriority.Selected.Value) = "Critical", IsBlank(txtSalesOrder.Text), false)),
+    Set(varValidationError, "Sales Order/ SVO Number is required for AOG and Critical requests"),
+
+    (LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+        &&
+    !LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing
+        &&
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+        &&
+    selectAssignedDept.Selected.Value <> "Configuration Management"
+        &&
+    varUser.Department = "Configuration Management"
+        &&
+    IsBlank(selectPartsDivision.Selected.Value)
+    ),
+    Set(varValidationError, "Please enter Parts Category"),
+
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail,
+            !IsBlank(error)
+        )
+    ) > 0,
+    Set(varValidationError, "One or more Part Details contain errors"),
+
+    !IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated) &&
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+            IsBlank(Reason)
+        )
+    ) > 0 &&
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Set(varValidationError, "Please provide a reason for every modified field"),
+
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) &&
+    selectAssignedDept.Selected.Value <> LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept &&
+    selectAssignedDept.Selected.Value <> varUser.Department &&
+    IsBlank(CommentsRichTextEditor.HtmlText),
+    Set(varValidationError, "Please add a comment describing your changes."),
+
+    IsBlank(CommentsRichTextEditor.HtmlText) &&
+    IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated),
+        With(
+        {
+            sd: LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+            tsd: LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails
+        },
+        If(
+            sd.CustomerID = tsd.CustomerID &&
+            sd.CustomerAccountNumber = tsd.CustomerAccountNumber &&
+            sd.ContactName = tsd.ContactName &&     // duplicate
+            sd.ContactName = tsd.ContactName &&
+            sd.PartsDivision = tsd.PartsDivision &&
+            sd.AlternativePartNumber = tsd.AlternativePartNumber &&
+            sd.'Quote Number' = tsd.'Quote Number' &&
+            sd.NHA = tsd.NHA &&
+            sd.ZendeskTicketNumber = tsd.ZendeskTicketNumber &&
+            sd.SalesforceCaseNumber = tsd.SalesforceCaseNumber &&
+            sd.'Sales Order' = tsd.'Sales Order' &&
+            sd.TechRef = tsd.TechRef &&
+            sd.PricingComments = tsd.PricingComments &&
+            sd.VendorName = tsd.VendorName &&
+            sd.'Vendor list Price' = tsd.'Vendor list Price' &&
+            sd.VendorCurrency = tsd.VendorCurrency &&
+            sd.BombardierCost = tsd.BombardierCost &&
+            sd.BBDCurrency = tsd.BBDCurrency &&
+            sd.LeadTime = tsd.LeadTime &&
+            sd.Solution = tsd.Solution,
+            
+            Set(varValidationError, "No changes made. If you added files, please add a comment describing them."),
+            
+            Set(varValidationError, "Please add a comment describing your changes.")
+        )
+    )
+);
+If(
+    !IsBlank(varValidationError) &&
+    Or(
+        IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+        selectAssignedTo.Selected.Person <> varUser.FullName
+    )
+    ,
+    Notify(varValidationError, NotificationType.Error),
+
+    // Continue Save Logic
+    If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+            &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+            &&
+        selectAssignedDept.Selected.Value <> "Configuration Management"
+            &&
+        varUser.Department = "Configuration Management"
+            &&
+        Or(IsBlank(PassFailDropdown.Selected.Value),
+        PassFailDropdown.Selected.Value = "Fail" && Or(IsBlank(FailReasonCombobox.Selected.Reason), IsBlank(TextInputReasonForFail.Text))),
+
+    Notify("Please fill Misses Tracker (marked *)", NotificationType.Error),
+
+    // Step to Prepare a batch queue before SubmitForm(Form1)
+    If(
+        And(
+            !IsBlank(LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).batchDocNo),
+            !LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isBatchEditing,
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).isEditing,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department
+        ),
+        Patch(
+            colOpenTabs,
+            LookUp(colOpenTabs, TabID = varActiveTabID),
+            {
+                showAutoAssignConfirmModal: true        // to stay on the same screen
+            }
+        );
+    );
+
+    Set(
+        varBaseDocNo,
+        LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ).DocNo
+    );
+
+    Set(
+        varIsBatchCreate,
+        Value(txtNumParts.Text) > 1
+    );
+
+    ClearCollect(
+        colCreateQueue,
+        If(
+            varIsBatchCreate,
+            ForAll(
+                Sequence(
+                    CountRows(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).colPartsDetail
+                    )
+                ),
+                With(
+                    {
+                        _part: Index(
+                            LookUp(
+                                colOpenTabs,
+                                TabID = varActiveTabID
+                            ).colPartsDetail,
+                            Value
+                        )
+                    },
+                    {
+                        SeqNo: Value,
+                        DocNo: Left(varBaseDocNo, Len(varBaseDocNo) - 5) &
+                            Text(
+                                Value(Right(varBaseDocNo, 5)) + Value - 1,
+                                "00000"
+                            ),
+                        BatchDocNo: varBaseDocNo,
+                        PartNumber: _part.PartNumber,
+                        PartDescription: _part.PartDescription
+                    }
+                )
+            ),
+            Table(
+                {
+                    SeqNo: 1,
+                    DocNo: varBaseDocNo,
+                    BatchDocNo: Blank(),
+                    PartNumber: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartNumber,
+                    PartDescription: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartDescription
+                }
+            )
+        )
+    );
+    Set(uploadButtonClicked, false);
+    SubmitForm(Form1);
+);
+);
+Set(showLoader, false);
+---------------------------- AFTER - CHANGE 1 -----------------------------
+Set(showLoader, true);
+Set(varValidationError, Blank());
+
+If(
+    (!IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) && LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo <> varUser.FullName &&
+    selectAssignedTo.Selected.Person <> varUser.FullName),
+    Set(varValidationError, "You need to assign the query to yourself first"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, "Please select an Aircraft Type"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, "Please select an Aircraft Model"),
+
+    IsBlank(custACModal.Selected.Aircraft_Model) && !IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACModel)&" Aircraft Model do not exist anymore"),
+
+    IsBlank(custACType.Selected.Value) && IsBlank(Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)),
+    Set(varValidationError, Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.ACType)&" Aircraft Type do not exist anymore"),
+
+    IsBlank(selectAssignedDept.Selected.Value),
+    Set(varValidationError, "Please select an Assigned Department"),
+
+    IsBlank(txtNumParts.Text),
+    Set(varValidationError, "Please enter number of parts"),
+
+    IsBlank(txtOriginator.Text),
+    Set(varValidationError, "Please enter Originator"),
+
+    IsBlank(txtOriginatorDept.Text),
+    Set(varValidationError, "Please enter Originator Department"),
+
+    IsBlank(cmbPriority.Selected.Value),
+    Set(varValidationError, "Please select Priority"),
+
+    IsBlank(cmbStatus.Selected.Value),
+    Set(varValidationError, "Please select Status"),
+
+    IsBlank(pnqSubject.Selected.Value),
+    Set(varValidationError, "Please select Subject"),
+
+    IsBlank(dtpNeedDate.SelectedDate),
+    Set(varValidationError, "Please select Need Date"),
+
+    IsBlank(selectAssignedTo.Selected),
+    Set(varValidationError, "Please assign the PNQ to a user"),
+    
+    LookUp(colOpenTabs, TabID = varActiveTabID).isIncorrectASN,
+    Set(varValidationError, "Please enter correct Aircraft Serial Number"),
+
+    cmbPriority.Selected.Value = 'Priority (PNQ_Backlogs)'.AOG && IsBlank(txtAircraftSerial.Text),
+    Set(varValidationError, "Aircraft Serial Number is required for AOG requests"),
+
+    IsBlank(txtQueryDesc.Text),
+    Set(varValidationError, "Please enter Query Description"),
+
+    Len(RichTextEditor_Pasted_Attachment.HtmlText) > 1048500,
+    Set(varValidationError, "Attachment size exceeds maximum allowed limit"),
+
+    (If(Text(cmbPriority.Selected.Value) = "AOG" || Text(cmbPriority.Selected.Value) = "Critical", IsBlank(txtSalesOrder.Text), false)),
+    Set(varValidationError, "Sales Order/ SVO Number is required for AOG and Critical requests"),
+
+    (LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+        &&
+    !LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing
+        &&
+    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+        &&
+    selectAssignedDept.Selected.Value <> "Configuration Management"
+        &&
+    varUser.Department = "Configuration Management"
+        &&
+    IsBlank(selectPartsDivision.Selected.Value)
+    ),
+    Set(varValidationError, "Please enter Parts Category"),
+
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail,
+            !IsBlank(error)
+        )
+    ) > 0,
+    Set(varValidationError, "One or more Part Details contain errors"),
+
+    !IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated) &&
+    CountRows(
+        Filter(
+            LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+            IsBlank(Reason)
+        )
+    ) > 0 &&
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Set(varValidationError, "Please provide a reason for every modified field"),
+
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails) &&
+    selectAssignedDept.Selected.Value <> LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept &&
+    selectAssignedDept.Selected.Value <> varUser.Department &&
+    IsBlank(CommentsRichTextEditor.HtmlText),
+    Set(varValidationError, "Please add a comment describing your changes."),
+
+    IsBlank(CommentsRichTextEditor.HtmlText) &&
+    IsEmpty(LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated),
+        With(
+        {
+            sd: LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+            tsd: LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails
+        },
+        If(
+            sd.CustomerID = tsd.CustomerID &&
+            sd.CustomerAccountNumber = tsd.CustomerAccountNumber &&
+            sd.ContactName = tsd.ContactName &&     // duplicate
+            sd.ContactName = tsd.ContactName &&
+            sd.PartsDivision = tsd.PartsDivision &&
+            sd.AlternativePartNumber = tsd.AlternativePartNumber &&
+            sd.'Quote Number' = tsd.'Quote Number' &&
+            sd.NHA = tsd.NHA &&
+            sd.ZendeskTicketNumber = tsd.ZendeskTicketNumber &&
+            sd.SalesforceCaseNumber = tsd.SalesforceCaseNumber &&
+            sd.'Sales Order' = tsd.'Sales Order' &&
+            sd.TechRef = tsd.TechRef &&
+            sd.PricingComments = tsd.PricingComments &&
+            sd.VendorName = tsd.VendorName &&
+            sd.'Vendor list Price' = tsd.'Vendor list Price' &&
+            sd.VendorCurrency = tsd.VendorCurrency &&
+            sd.BombardierCost = tsd.BombardierCost &&
+            sd.BBDCurrency = tsd.BBDCurrency &&
+            sd.LeadTime = tsd.LeadTime &&
+            sd.Solution = tsd.Solution,
+            
+            Set(varValidationError, "No changes made. If you added files, please add a comment describing them."),
+            
+            Set(varValidationError, "Please add a comment describing your changes.")
+        )
+    )
+);
+If(
+    !IsBlank(varValidationError) &&
+    Or(
+        IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = varUser.Department &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo = varUser.FullName,
+        selectAssignedTo.Selected.Person <> varUser.FullName
+    )
+    ,
+    Notify(varValidationError, NotificationType.Error),
+
+    // Continue Save Logic
+    If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+            &&
+        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+            &&
+        selectAssignedDept.Selected.Value <> "Configuration Management"
+            &&
+        varUser.Department = "Configuration Management"
+            &&
+        Or(IsBlank(PassFailDropdown.Selected.Value),
+        PassFailDropdown.Selected.Value = "Fail" && Or(IsBlank(FailReasonCombobox.Selected.Reason), IsBlank(TextInputReasonForFail.Text))),
+
+    Notify("Please fill Misses Tracker (marked *)", NotificationType.Error),
+
+    // Step to Prepare a batch queue before SubmitForm(Form1)
+    Set(
+        varBaseDocNo,
+        LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ).DocNo
+    );
+
+    Set(
+        varIsBatchCreate,
+        Value(txtNumParts.Text) > 1
+    );
+
+    ClearCollect(
+        colCreateQueue,
+        If(
+            varIsBatchCreate,
+            ForAll(
+                Sequence(
+                    CountRows(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).colPartsDetail
+                    )
+                ),
+                With(
+                    {
+                        _part: Index(
+                            LookUp(
+                                colOpenTabs,
+                                TabID = varActiveTabID
+                            ).colPartsDetail,
+                            Value
+                        )
+                    },
+                    {
+                        SeqNo: Value,
+                        DocNo: Left(varBaseDocNo, Len(varBaseDocNo) - 5) &
+                            Text(
+                                Value(Right(varBaseDocNo, 5)) + Value - 1,
+                                "00000"
+                            ),
+                        BatchDocNo: varBaseDocNo,
+                        PartNumber: _part.PartNumber,
+                        PartDescription: _part.PartDescription
+                    }
+                )
+            ),
+            Table(
+                {
+                    SeqNo: 1,
+                    DocNo: varBaseDocNo,
+                    BatchDocNo: Blank(),
+                    PartNumber: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartNumber,
+                    PartDescription: First(LookUp(colOpenTabs, TabID = varActiveTabID).colPartsDetail).PartDescription
+                }
+            )
+        )
+    );
+    Set(uploadButtonClicked, false);
+    SubmitForm(Form1);
+);
+);
+Set(showLoader, false);
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 2 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > HiddenSaveButton
+        (it is hidden: click it in the Tree view, you don't need to see it on the screen)
+STEP 3: Property dropdown: OnSelect
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: after the save, the tab is always closed and you go back to the home list
+(the "keep the tab open" part of the last If is removed). Nothing else changes.
+---------------------------- BEFORE - CHANGE 2 ----------------------------
+Set(showLoader, true);
+Set(
+    varCurrentMainRecord,
+    First(colCreateQueue)
+);
+
+Set(
+    varMainDocNo,
+    varCurrentMainRecord.DocNo
+);
+
+Set(
+    varMainBatchDocNo,
+    varCurrentMainRecord.BatchDocNo
+);
+
+Set(
+    varMainPartNumber,
+    varCurrentMainRecord.PartNumber
+);
+
+Set(
+    varMainPartDescription,
+    varCurrentMainRecord.PartDescription
+);
+If(IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    // Save New Record
+    Patch(PNQ_Backlogs,
+        Defaults(PNQ_Backlogs),
+        {
+            DocNo: varMainDocNo,
+            BatchDocNo: varMainBatchDocNo,
+            ACModel:custACModal.Selected.Aircraft_Model,
+            ACType: custACType.Selected.Value,
+            AssignedDept:selectAssignedDept.Selected.Value,
+            CreatedDate:dtpCreatedDate.SelectedDate,
+            Customer:cmblblAircraftOwner.Selected.'Owner Name',
+            'Date Closed': dtpClosedDate.SelectedDate,
+            NumberOfParts: Value(txtNumParts.Text),
+            Originator:txtOriginator.Text,
+            OriginatorDept: txtOriginatorDept.Text,
+            PartNumber: varMainPartNumber,
+            Priority: cmbPriority.Selected.Value,
+            'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+            Subject: pnqSubject.Selected.Key,
+            'Need Date': dtpNeedDate.SelectedDate,
+            AssignedTo: selectAssignedTo.Selected.Person
+        }
+    );
+    ClearCollect(
+        colFieldPairs,
+        {
+            FieldName: "ACModel",
+            NewValue: custACModal.Selected.Aircraft_Model
+        },{
+            FieldName: "ACType",
+            NewValue: Text(custACType.Selected.Value)
+        },{
+            FieldName: "Assigned Department",
+            NewValue: selectAssignedDept.Selected.Value
+        },{
+            FieldName: "CreatedDate",
+            NewValue: Text(dtpCreatedDate.SelectedDate)
+        },{
+            FieldName: "Customer",
+            NewValue: cmblblAircraftOwner.Selected.'Owner Name'
+        },{
+            FieldName: "NumberOfParts",
+            NewValue: txtNumParts.Text
+        },{
+            FieldName: "Originator",
+            NewValue: txtOriginator.Text
+        },{
+            FieldName: "OriginatingDept",
+            NewValue: txtOriginatorDept.Text
+        },{
+            FieldName: "PartNumber",
+            NewValue: varMainPartNumber
+        },{
+            FieldName: "Priority",
+            NewValue: Text(cmbPriority.Selected.Value)
+        },{
+            FieldName: "Status",
+            NewValue: Text(cmbStatus.Selected.Value)
+        },
+        {
+            FieldName: "Subject",
+            NewValue: pnqSubject.Selected.Key
+        },
+        {
+            FieldName: "Need Date",
+            NewValue: Text(dtpNeedDate.SelectedDate)
+        },
+        {
+            FieldName: "AircraftSerialNumber",
+            NewValue: txtAircraftSerial.Text
+        },
+        {
+            FieldName: "PartsDivision",
+            NewValue: selectPartsDivision.Selected.Value
+        },
+        {
+            FieldName: "Query_Description",
+            NewValue: txtQueryDesc.Text
+        },
+        {
+            FieldName: "TechRef",
+            NewValue: txtTechRef.Text
+        }
+    );
+    Patch(PNQ_Comments,
+        Defaults(PNQ_Comments),
+        {
+            DocNo: varMainDocNo,
+            BatchDocNo: If(IsBlank(varMainBatchDocNo), "", varMainBatchDocNo),
+            CommentID: Coalesce(
+                Max(
+                    Filter(
+                        PNQ_Comments,
+                        DocNo = varMainDocNo
+                    ),
+                    CommentID
+                ),
+                0
+            )+1,
+            CommentText: CommentsRichTextEditor.HtmlText,
+            DateTime: Now(),
+            //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM"), "en-US"),
+            Department: varUser.Department,
+            DateTimeUTC: DateDiff(
+                DateAdd(
+                    Now(),
+                    TimeZoneOffset(),
+                    TimeUnit.Minutes
+                ),
+                Date(1899,12,30),
+                TimeUnit.Seconds
+            ) / 86400,
+            DepartmentCode: varUser.DepartmentCode,
+            Name: varUser.FullName,
+            New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+            New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+            Current_AssignedTo_Person: If(varUser.FullName = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo),
+            Current_AssignedTo_Department: If(varUser.Department = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept),
+            'Field Updated': Concat(
+                Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                FieldName,
+                "|||"
+            ),
+            NewValue: Concat(
+                Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                Text(NewValue),
+                "|||"
+            )
+        }
+    );
+    Patch(Query_Details,
+        LookUp(
+            Query_Details,
+            DocNo = varMainDocNo
+        ),
+        {
+        BatchDocNo: varMainBatchDocNo,
+        AircraftSerialNumber: txtAircraftSerial.Text,
+        CustomerID:cmblblAircraftOwner.Selected.'Owner Name',
+        ContactName: txtCustomerName.Text,
+        CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+        PartsDivision: selectPartsDivision.Selected.Value,
+        AlternativePartNumber: txtAltPartNumber.Text,
+        PartDescription: varMainPartDescription,
+        Query_Description: txtQueryDesc.Text,
+        'Sales Order': txtSalesOrder.Text,
+        'Quote Number': txtQuoteNumber.Text,
+        NHA: txtNHA.Text,
+        TechRef: txtTechRef.Text,
+        PricingComments: txtPricingComments.Text,
+        VendorName: txtVendorName.Text,
+        'Vendor list Price': Value(txtVendorList.Text),
+        VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+        BombardierCost: Value(txtBBDCost.Text),
+        BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+        LeadTime: txtLeadTime.Text,
+        Solution: txtSolution.Text,
+        PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+        ZendeskTicketNumber: txtTicketCaseNumber.Text,
+        SalesforceCaseNumber: txtCaseNumber.Text,
+        iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+        iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+        iQueryQualityFailureReasonComments: FailureComments.Text
+    });
+    If(
+        CountRows(colCreateQueue) > 1,
+        ForAll(
+            Filter(
+                colCreateQueue,
+                SeqNo > 1
+            ),
+            Patch(
+                PNQ_Backlogs,
+                Defaults(PNQ_Backlogs),
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    ACModel: custACModal.Selected.Aircraft_Model,
+                    ACType: custACType.Selected.Value,
+                    AssignedDept: selectAssignedDept.Selected.Value,
+                    CreatedDate: dtpCreatedDate.SelectedDate,
+                    Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                    'Date Closed': dtpClosedDate.SelectedDate,
+                    NumberOfParts: Value(txtNumParts.Text),
+                    Originator: txtOriginator.Text,
+                    OriginatorDept: txtOriginatorDept.Text,
+                    PartNumber: ThisRecord.PartNumber,
+                    Priority: cmbPriority.Selected.Value,
+                    'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+                    Subject: pnqSubject.Selected.Key,
+                    'Need Date': dtpNeedDate.SelectedDate,
+                    AssignedTo: selectAssignedTo.Selected.Person
+                }
+            );
+
+            Patch(
+                Query_Details,
+                Defaults(Query_Details),        // defaults mean the values are currently blank
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    AircraftSerialNumber: txtAircraftSerial.Text,
+                    CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                    ContactName: txtCustomerName.Text,
+                    CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                    PartsDivision: selectPartsDivision.Selected.Value,
+                    AlternativePartNumber: txtAltPartNumber.Text,
+                    PartDescription: ThisRecord.PartDescription,
+                    Query_Description: txtQueryDesc.Text,
+                    'Sales Order': txtSalesOrder.Text,
+                    'Quote Number': txtQuoteNumber.Text,
+                    NHA: txtNHA.Text,
+                    TechRef: txtTechRef.Text,
+                    PricingComments: txtPricingComments.Text,
+                    VendorName: txtVendorName.Text,
+                    'Vendor list Price': Value(txtVendorList.Text),
+                    VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                    BombardierCost: Value(txtBBDCost.Text),
+                    BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                    LeadTime: txtLeadTime.Text,
+                    Solution: txtSolution.Text,
+                    PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                    ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                    SalesforceCaseNumber: txtCaseNumber.Text,
+                    iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                    iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                    iQueryQualityFailureReasonComments: FailureComments.Text
+                }
+            );
+
+            Patch(
+                PNQ_Comments,
+                Defaults(PNQ_Comments),
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    CommentID: 1,
+                    CommentText: CommentsRichTextEditor.HtmlText,
+                    DateTime: Now(),
+                    // DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                    Department: varUser.Department,
+                    DateTimeUTC: DateDiff(
+                        Now(),
+                        Date(1899, 12, 30),
+                        TimeUnit.Seconds
+                    ) / 86400,
+                    DepartmentCode: varUser.DepartmentCode,
+                    Name: varUser.FullName,
+                    New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                    New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                    Current_AssignedTo_Person: Blank(),
+                    Current_AssignedTo_Department: Blank(),
+                    'Field Updated': Concat(
+                        Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                        FieldName,
+                        "|||"
+                    ),
+                    NewValue: Concat(
+                        Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                        Text(NewValue),
+                        "|||"
+                    )
+                }
+            )
+        )
+    );
+    Patch(
+        PNQ_Department_Employee_Tables,
+        LookUp(
+            PNQ_Department_Employee_Tables,
+            Employee_Code = varUser.EmployeeCode
+        ),
+        {
+            Last_Sequence: Max(
+                colCreateQueue,
+                Value(Right(DocNo, 5))
+            )
+        }
+    );
+    Set(UserLastSequence, UserLastSequence + CountRows(colCreateQueue)-1);
+    If(
+        CountRows(colCreateQueue) = 1,
+        Notify(
+            "Record saved successfully. Doc No: " & First(colCreateQueue).DocNo,
+            NotificationType.Success
+        ),
+        Notify(
+            CountRows(colCreateQueue)&" Records saved successfully. Doc No(s): " &
+            Concat(
+                colCreateQueue,
+                Text(DocNo),
+                ", "
+            ),
+            NotificationType.Success
+        )
+    );
+    ,
+    // Update Record
+    Set(
+        varBatchRootDocNo,
+        Coalesce(
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).queryDetails.BatchDocNo,
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).DocNo
+        )
+    );
+
+    If(
+        LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+        //Update Group - only the parts that are NOT Closed (change of 2026-11-13).
+        //A closed part stays in the group, but group edit no longer changes it:
+        //no field changes, no history comment, no Misses Tracker row.
+        //All parts of the group (this filter returns every part), then the Closed ones are
+        //removed here in the app. Asking Dataverse for "not Closed" together with the group
+        //number returned only some of the open parts (fix of 2026-11-15).
+        ClearCollect(
+            colGroupOpenParts,
+            Filter(PNQ_Backlogs, BatchDocNo = varBatchRootDocNo)
+        );
+        RemoveIf(
+            colGroupOpenParts,
+            'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed
+        );
+        //Status and Date Closed are written ONLY if Status was changed in this group edit
+        //(Status is then in fieldsUpdated). Otherwise each open part keeps its own Status
+        //(e.g. Open or Interim) and its own Date Closed.
+        Set(
+            varGroupStatusChanged,
+            !IsEmpty(
+                Filter(
+                    LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+                    FieldName = "Status"
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As OpenPart,
+            With(
+                {
+                    _part: LookUp(PNQ_Backlogs, DocNo = OpenPart.DocNo)
+                },
+                Patch(
+                    PNQ_Backlogs,
+                    _part,
+                    {
+                        ACModel: custACModal.Selected.Aircraft_Model,
+                        ACType: custACType.Selected.Value,
+                        AssignedDept: selectAssignedDept.Selected.Value,
+                        CreatedDate: dtpCreatedDate.SelectedDate,
+                        Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                        'Date Closed': If(varGroupStatusChanged, dtpClosedDate.SelectedDate, _part.'Date Closed'),
+                        Originator: txtOriginator.Text,
+                        OriginatorDept: txtOriginatorDept.Text,
+                        Priority: cmbPriority.Selected.Value,
+                        'Status (cr7ba_pnqstatus)': If(varGroupStatusChanged, cmbStatus.Selected.Value, _part.'Status (cr7ba_pnqstatus)'),
+                        Subject: pnqSubject.Selected.Key,
+                        'Need Date': dtpNeedDate.SelectedDate,
+                        AssignedTo: selectAssignedTo.Selected.Person
+                    }
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As OpenPart,
+            With(
+                {
+                    _details: LookUp(Query_Details, DocNo = OpenPart.DocNo)
+                },
+                If(
+                    !IsBlank(_details),
+                    Patch(
+                        Query_Details,
+                        _details,
+                        {
+                            AircraftSerialNumber: txtAircraftSerial.Text,
+                            CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                            ContactName: txtCustomerName.Text,
+                            CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                            Query_Description: txtQueryDesc.Text,
+                            'Sales Order': txtSalesOrder.Text,
+                            'Quote Number': txtQuoteNumber.Text,
+                            NHA: txtNHA.Text,
+                            TechRef: txtTechRef.Text,
+                            PricingComments: txtPricingComments.Text,
+                            VendorName: txtVendorName.Text,
+                            'Vendor list Price': Value(txtVendorList.Text),
+                            VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                            BombardierCost: Value(txtBBDCost.Text),
+                            BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                            LeadTime: txtLeadTime.Text,
+                            Solution: txtSolution.Text,
+                            LockedByUserEmail: "",
+                            lockedByUserAtTime: Blank(),
+                            PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                            ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                            SalesforceCaseNumber: txtCaseNumber.Text,
+                            iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                            iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                            iQueryQualityFailureReasonComments: FailureComments.Text
+                        }
+                    )
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As BacklogRec,
+            With(
+                {
+                    UserLastComment: First(
+                        SortByColumns(
+                            Filter(
+                                PNQ_Comments,
+                                DocNo = BacklogRec.DocNo
+                            ),
+                            "cr7ba_commentidentifier",
+                            SortOrder.Descending
+                        )
+                    )
+                },
+                Patch(
+                    PNQ_Comments,
+                    Defaults(PNQ_Comments),
+                    {
+                        DocNo: UserLastComment.DocNo,
+                        BatchDocNo: UserLastComment.BatchDocNo,
+                        CommentID: UserLastComment.CommentID+1,
+                        CommentText: CommentsRichTextEditor.HtmlText,
+                        DateTime: Now(),
+                        //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                        DateTimeUTC: DateDiff(
+                            Now(),
+                            Date(1899,12,30),
+                            TimeUnit.Seconds
+                        ) / 86400,
+                        Department: varUser.Department,
+                        DepartmentCode: varUser.DepartmentCode,
+                        Name: User().FullName,
+                        New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                        New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                        Current_AssignedTo_Person: UserLastComment.New_AssignedTo_Person,
+                        Current_AssignedTo_Department: UserLastComment.New_AssignedTo_Department,
+                        'Field Updated':
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                FieldName,
+                                "|||"
+                            ),
+                        NewValue:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Text(NewValue),
+                                "|||"
+                            ),
+                        OldValue:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Text(OldValue),
+                                "|||"
+                            ),
+                        ReasonForFieldUpdate:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Reason,
+                                "|||"
+                            )
+                    }
+                );
+
+                If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+                        &&
+                    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+                        &&
+                    selectAssignedDept.Selected.Value <> "Configuration Management"
+                        &&
+                    varUser.Department = "Configuration Management",
+
+                    Patch(
+                        iQuery_MissesTrackers,
+                        Defaults(iQuery_MissesTrackers),
+                        {
+                            DocNo: BacklogRec.DocNo,
+                            MissUpdate: If(PassFailDropdown.Selected.Value = "Pass", 'MissUpdate (iQuery_MissesTrackers)'.Pass, 'MissUpdate (iQuery_MissesTrackers)'.Fail),
+                            FullName: varUser.FullName,
+                            FailureComments: TextInputReasonForFail.Text,
+                            FailReason: FailReasonCombobox.Selected.Reason,
+                            BatchDocNo: LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo
+                        }
+                    )
+                );
+            )
+        );,
+        //Update single
+        Patch(
+            PNQ_Backlogs,
+            LookUp(
+                PNQ_Backlogs,
+                DocNo = LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).DocNo
+            ),
+            {
+                ACModel: custACModal.Selected.Aircraft_Model,
+                ACType: custACType.Selected.Value,
+                AssignedDept: selectAssignedDept.Selected.Value,
+                CreatedDate: dtpCreatedDate.SelectedDate,
+                Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                'Date Closed': dtpClosedDate.SelectedDate,
+                NumberOfParts: Value(txtNumParts.Text),
+                Originator: txtOriginator.Text,
+                OriginatorDept: txtOriginatorDept.Text,
+                Priority: cmbPriority.Selected.Value,
+                'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+                Subject: pnqSubject.Selected.Key,
+                'Need Date': dtpNeedDate.SelectedDate,
+                AssignedTo: selectAssignedTo.Selected.Person
+            }
+        );
+
+        Patch(
+            Query_Details,
+            LookUp(
+                Query_Details,
+                DocNo = LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).DocNo
+            ),
+            {
+                AircraftSerialNumber: txtAircraftSerial.Text,
+                CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                ContactName: txtCustomerName.Text,
+                CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                PartsDivision: selectPartsDivision.Selected.Value,
+                AlternativePartNumber: txtAltPartNumber.Text,
+                Query_Description: txtQueryDesc.Text,
+                'Sales Order': txtSalesOrder.Text,
+                'Quote Number': txtQuoteNumber.Text,
+                NHA: txtNHA.Text,
+                TechRef: txtTechRef.Text,
+                PricingComments: txtPricingComments.Text,
+                VendorName: txtVendorName.Text,
+                'Vendor list Price': Value(txtVendorList.Text),
+                VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                BombardierCost: Value(txtBBDCost.Text),
+                BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                LeadTime: txtLeadTime.Text,
+                Solution: txtSolution.Text,
+                LockedByUserEmail: "",
+                lockedByUserAtTime: Blank(),
+                PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                SalesforceCaseNumber: txtCaseNumber.Text,
+                iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                iQueryQualityFailureReasonComments: FailureComments.Text
+            }
+        );
+
+        Patch(
+            PNQ_Comments,
+            Defaults(PNQ_Comments),
+            {
+                DocNo: LookUp(colOpenTabs, TabID = varActiveTabID).DocNo,
+                BatchDocNo: LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo,
+                CommentID: Coalesce(
+                    Max(
+                        Filter(
+                            PNQ_Comments,
+                            DocNo = LookUp(colOpenTabs, TabID = varActiveTabID).DocNo
+                        ),
+                        CommentID
+                    ),
+                    0
+                )+1,
+                CommentText: CommentsRichTextEditor.HtmlText,
+                DateTime: Now(),
+                //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                DateTimeUTC: DateDiff(
+                    Now(),
+                    Date(1899,12,30),
+                    TimeUnit.Seconds
+                ) / 86400,
+                Department: varUser.Department,
+                DepartmentCode: varUser.DepartmentCode,
+                Name: User().FullName,
+                New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                Current_AssignedTo_Person: If(varUser.FullName = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo),
+                Current_AssignedTo_Department: If(varUser.Department = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept),
+                'Field Updated':
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        FieldName,
+                        "|||"
+                    ),
+                NewValue:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Text(NewValue),
+                        "|||"
+                    ),
+                OldValue:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Text(OldValue),
+                        "|||"
+                    ),
+                ReasonForFieldUpdate:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Reason,
+                        "|||"
+                    )
+            }
+        );
+        If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+                &&
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+                &&
+            selectAssignedDept.Selected.Value <> "Configuration Management"
+                &&
+            varUser.Department = "Configuration Management",
+
+            Patch(
+                iQuery_MissesTrackers,
+                Defaults(iQuery_MissesTrackers),
+                {
+                    DocNo: LookUp(colOpenTabs, TabID = varActiveTabID).DocNo,
+                    MissUpdate: If(PassFailDropdown.Selected.Value = "Pass", 'MissUpdate (iQuery_MissesTrackers)'.Pass, 'MissUpdate (iQuery_MissesTrackers)'.Fail),
+                    FullName: varUser.FullName,
+                    FailureComments: TextInputReasonForFail.Text,
+                    FailReason: FailReasonCombobox.Selected.Reason,
+                    BatchDocNo: ""
+                }
+            )
+        );
+    );
+
+    If(
+        LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+        Notify(
+            CountRows(colGroupOpenParts)&" Records saved successfully. Doc No(s): " &
+            Concat(
+                colGroupOpenParts,
+                Text(DocNo),
+                ", "
+            ),
+            NotificationType.Success
+        ),
+        Notify(
+            "Record saved successfully. Doc No: " & varBatchRootDocNo,
+            NotificationType.Success
+        )
+    );
+);
+// Switch to previous tab if this was active
+/*If(LookUp(colOpenTabs, TabID = varActiveTabID).TabID = varActiveTabID,
+Set(varActiveTabID,   Last(colOpenTabs).TabID);
+Set(varActiveTabType, Last(colOpenTabs).TabType);
+Set(varActiveDocNo,   Last(colOpenTabs).DocNo);
+);*/
+
+// Close tab and return to list (also when the query was just Closed, e.g. one part of a group)
+If(Or(
+    !LookUp(colOpenTabs, TabID = varActiveTabID).showAutoAssignConfirmModal,
+    selectAssignedDept.Selected.Value <> varUser.Department,
+    selectAssignedTo.Selected.Person <> varUser.FullName,
+    Text(cmbStatus.Selected.Value) = "Closed")
+    ,
+    Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
+    Set(varActiveTabID,   "tab_home");
+    Set(varActiveTabType, "list");
+    Set(varActiveDocNo,   "");
+    Set(varFormError,     "");,
+    Patch(
+        colOpenTabs,
+        LookUp(
+            colOpenTabs,
+            TabID = varActiveTabID
+        ),
+        {
+            showAutoAssignConfirmModal: false,
+            queryDetails: LookUp(colOpenTabs, TabID = varActiveTabID).tempQueryDetails,
+            secondaryDetails: Patch(
+                LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+                LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails
+            ),
+            fieldsUpdated: FirstN(
+                Table(
+                    {
+                        FieldName: "",
+                        OldValue: "",
+                        NewValue: "",
+                        Reason: ""
+                    }
+                ),
+                0
+            )
+        }
+    )
+);
+Reset(pnqSubject);
+Reset(txtQueryDesc);
+Reset(txtTicketCaseNumber);
+Reset(txtCaseNumber);
+Refresh(PNQ_Backlogs);
+Refresh(Query_Details);
+Refresh(PNQ_Comments);
+With(
+    {
+        _AOG:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "AOG"
+                )
+            ),
+
+        _Critical:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Critical"
+                )
+            ),
+
+        _Quote:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Customer Quote"
+                )
+            ),
+
+        _Routine:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Routine"
+                )
+            ),
+
+        _Open:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Open"
+                )
+            ),
+
+        _Interim:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Interim"
+                )
+            ),
+
+        _Close:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Close"
+                )
+            )
+    },
+
+    ClearCollect(
+        PNQ_DB_ListAll,
+
+        Filter(
+            PNQ_Backlogs,
+
+            // Priority
+            (
+                !_AOG &&
+                !_Critical &&
+                !_Quote &&
+                !_Routine
+            )
+            ||
+            (
+                _AOG &&
+                Priority = 'Priority (PNQ_Backlogs)'.AOG
+            )
+            ||
+            (
+                _Critical &&
+                Priority = 'Priority (PNQ_Backlogs)'.Critical
+            )
+            ||
+            (
+                _Quote &&
+                Priority = 'Priority (PNQ_Backlogs)'.'Customer Quote'
+            )
+            ||
+            (
+                _Routine &&
+                Priority = 'Priority (PNQ_Backlogs)'.Routine
+            ),
+
+            // Status
+            (
+                !_Open &&
+                !_Interim &&
+                !_Close
+            )
+            ||
+            (
+                _Open &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Open
+            )
+            ||
+            (
+                _Interim &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Interim
+            )
+            ||
+            (
+                _Close &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed
+            ),
+
+            (IsEmpty(ComboBox1.SelectedItems) || IsBlank(ComboBox1.SelectedItems)) ||
+            AssignedDept in ComboBox1.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_1.SelectedItems) || IsBlank(ComboBox1_1.SelectedItems)) ||
+            AssignedTo in ComboBox1_1.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_2.SelectedItems) || IsBlank(ComboBox1_2.SelectedItems)) ||
+            Originator in ComboBox1_2.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_3.SelectedItems) || IsBlank(ComboBox1_3.SelectedItems)) ||
+            OriginatorDept in ComboBox1_3.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_4.SelectedItems) || IsBlank(ComboBox1_4.SelectedItems)) ||
+            Customer in ComboBox1_4.SelectedItems.Value,
+
+            IsBlank(DatePicker_From_1.SelectedDate) ||
+            CreatedDate >= DatePicker_From_1.SelectedDate,
+
+            IsBlank(DatePicker_To_1.SelectedDate) ||
+            CreatedDate <= DatePicker_To_1.SelectedDate
+        )
+    )
+);
+Reset(PassFailDropdown);
+Reset(FailReasonCombobox);
+Reset(TextInputReasonForFail);
+Set(showLoader, false);
+---------------------------- AFTER - CHANGE 2 -----------------------------
+Set(showLoader, true);
+Set(
+    varCurrentMainRecord,
+    First(colCreateQueue)
+);
+
+Set(
+    varMainDocNo,
+    varCurrentMainRecord.DocNo
+);
+
+Set(
+    varMainBatchDocNo,
+    varCurrentMainRecord.BatchDocNo
+);
+
+Set(
+    varMainPartNumber,
+    varCurrentMainRecord.PartNumber
+);
+
+Set(
+    varMainPartDescription,
+    varCurrentMainRecord.PartDescription
+);
+If(IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    // Save New Record
+    Patch(PNQ_Backlogs,
+        Defaults(PNQ_Backlogs),
+        {
+            DocNo: varMainDocNo,
+            BatchDocNo: varMainBatchDocNo,
+            ACModel:custACModal.Selected.Aircraft_Model,
+            ACType: custACType.Selected.Value,
+            AssignedDept:selectAssignedDept.Selected.Value,
+            CreatedDate:dtpCreatedDate.SelectedDate,
+            Customer:cmblblAircraftOwner.Selected.'Owner Name',
+            'Date Closed': dtpClosedDate.SelectedDate,
+            NumberOfParts: Value(txtNumParts.Text),
+            Originator:txtOriginator.Text,
+            OriginatorDept: txtOriginatorDept.Text,
+            PartNumber: varMainPartNumber,
+            Priority: cmbPriority.Selected.Value,
+            'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+            Subject: pnqSubject.Selected.Key,
+            'Need Date': dtpNeedDate.SelectedDate,
+            AssignedTo: selectAssignedTo.Selected.Person
+        }
+    );
+    ClearCollect(
+        colFieldPairs,
+        {
+            FieldName: "ACModel",
+            NewValue: custACModal.Selected.Aircraft_Model
+        },{
+            FieldName: "ACType",
+            NewValue: Text(custACType.Selected.Value)
+        },{
+            FieldName: "Assigned Department",
+            NewValue: selectAssignedDept.Selected.Value
+        },{
+            FieldName: "CreatedDate",
+            NewValue: Text(dtpCreatedDate.SelectedDate)
+        },{
+            FieldName: "Customer",
+            NewValue: cmblblAircraftOwner.Selected.'Owner Name'
+        },{
+            FieldName: "NumberOfParts",
+            NewValue: txtNumParts.Text
+        },{
+            FieldName: "Originator",
+            NewValue: txtOriginator.Text
+        },{
+            FieldName: "OriginatingDept",
+            NewValue: txtOriginatorDept.Text
+        },{
+            FieldName: "PartNumber",
+            NewValue: varMainPartNumber
+        },{
+            FieldName: "Priority",
+            NewValue: Text(cmbPriority.Selected.Value)
+        },{
+            FieldName: "Status",
+            NewValue: Text(cmbStatus.Selected.Value)
+        },
+        {
+            FieldName: "Subject",
+            NewValue: pnqSubject.Selected.Key
+        },
+        {
+            FieldName: "Need Date",
+            NewValue: Text(dtpNeedDate.SelectedDate)
+        },
+        {
+            FieldName: "AircraftSerialNumber",
+            NewValue: txtAircraftSerial.Text
+        },
+        {
+            FieldName: "PartsDivision",
+            NewValue: selectPartsDivision.Selected.Value
+        },
+        {
+            FieldName: "Query_Description",
+            NewValue: txtQueryDesc.Text
+        },
+        {
+            FieldName: "TechRef",
+            NewValue: txtTechRef.Text
+        }
+    );
+    Patch(PNQ_Comments,
+        Defaults(PNQ_Comments),
+        {
+            DocNo: varMainDocNo,
+            BatchDocNo: If(IsBlank(varMainBatchDocNo), "", varMainBatchDocNo),
+            CommentID: Coalesce(
+                Max(
+                    Filter(
+                        PNQ_Comments,
+                        DocNo = varMainDocNo
+                    ),
+                    CommentID
+                ),
+                0
+            )+1,
+            CommentText: CommentsRichTextEditor.HtmlText,
+            DateTime: Now(),
+            //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM"), "en-US"),
+            Department: varUser.Department,
+            DateTimeUTC: DateDiff(
+                DateAdd(
+                    Now(),
+                    TimeZoneOffset(),
+                    TimeUnit.Minutes
+                ),
+                Date(1899,12,30),
+                TimeUnit.Seconds
+            ) / 86400,
+            DepartmentCode: varUser.DepartmentCode,
+            Name: varUser.FullName,
+            New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+            New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+            Current_AssignedTo_Person: If(varUser.FullName = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo),
+            Current_AssignedTo_Department: If(varUser.Department = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept),
+            'Field Updated': Concat(
+                Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                FieldName,
+                "|||"
+            ),
+            NewValue: Concat(
+                Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                Text(NewValue),
+                "|||"
+            )
+        }
+    );
+    Patch(Query_Details,
+        LookUp(
+            Query_Details,
+            DocNo = varMainDocNo
+        ),
+        {
+        BatchDocNo: varMainBatchDocNo,
+        AircraftSerialNumber: txtAircraftSerial.Text,
+        CustomerID:cmblblAircraftOwner.Selected.'Owner Name',
+        ContactName: txtCustomerName.Text,
+        CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+        PartsDivision: selectPartsDivision.Selected.Value,
+        AlternativePartNumber: txtAltPartNumber.Text,
+        PartDescription: varMainPartDescription,
+        Query_Description: txtQueryDesc.Text,
+        'Sales Order': txtSalesOrder.Text,
+        'Quote Number': txtQuoteNumber.Text,
+        NHA: txtNHA.Text,
+        TechRef: txtTechRef.Text,
+        PricingComments: txtPricingComments.Text,
+        VendorName: txtVendorName.Text,
+        'Vendor list Price': Value(txtVendorList.Text),
+        VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+        BombardierCost: Value(txtBBDCost.Text),
+        BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+        LeadTime: txtLeadTime.Text,
+        Solution: txtSolution.Text,
+        PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+        ZendeskTicketNumber: txtTicketCaseNumber.Text,
+        SalesforceCaseNumber: txtCaseNumber.Text,
+        iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+        iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+        iQueryQualityFailureReasonComments: FailureComments.Text
+    });
+    If(
+        CountRows(colCreateQueue) > 1,
+        ForAll(
+            Filter(
+                colCreateQueue,
+                SeqNo > 1
+            ),
+            Patch(
+                PNQ_Backlogs,
+                Defaults(PNQ_Backlogs),
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    ACModel: custACModal.Selected.Aircraft_Model,
+                    ACType: custACType.Selected.Value,
+                    AssignedDept: selectAssignedDept.Selected.Value,
+                    CreatedDate: dtpCreatedDate.SelectedDate,
+                    Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                    'Date Closed': dtpClosedDate.SelectedDate,
+                    NumberOfParts: Value(txtNumParts.Text),
+                    Originator: txtOriginator.Text,
+                    OriginatorDept: txtOriginatorDept.Text,
+                    PartNumber: ThisRecord.PartNumber,
+                    Priority: cmbPriority.Selected.Value,
+                    'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+                    Subject: pnqSubject.Selected.Key,
+                    'Need Date': dtpNeedDate.SelectedDate,
+                    AssignedTo: selectAssignedTo.Selected.Person
+                }
+            );
+
+            Patch(
+                Query_Details,
+                Defaults(Query_Details),        // defaults mean the values are currently blank
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    AircraftSerialNumber: txtAircraftSerial.Text,
+                    CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                    ContactName: txtCustomerName.Text,
+                    CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                    PartsDivision: selectPartsDivision.Selected.Value,
+                    AlternativePartNumber: txtAltPartNumber.Text,
+                    PartDescription: ThisRecord.PartDescription,
+                    Query_Description: txtQueryDesc.Text,
+                    'Sales Order': txtSalesOrder.Text,
+                    'Quote Number': txtQuoteNumber.Text,
+                    NHA: txtNHA.Text,
+                    TechRef: txtTechRef.Text,
+                    PricingComments: txtPricingComments.Text,
+                    VendorName: txtVendorName.Text,
+                    'Vendor list Price': Value(txtVendorList.Text),
+                    VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                    BombardierCost: Value(txtBBDCost.Text),
+                    BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                    LeadTime: txtLeadTime.Text,
+                    Solution: txtSolution.Text,
+                    PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                    ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                    SalesforceCaseNumber: txtCaseNumber.Text,
+                    iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                    iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                    iQueryQualityFailureReasonComments: FailureComments.Text
+                }
+            );
+
+            Patch(
+                PNQ_Comments,
+                Defaults(PNQ_Comments),
+                {
+                    DocNo: ThisRecord.DocNo,
+                    BatchDocNo: ThisRecord.BatchDocNo,
+                    CommentID: 1,
+                    CommentText: CommentsRichTextEditor.HtmlText,
+                    DateTime: Now(),
+                    // DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                    Department: varUser.Department,
+                    DateTimeUTC: DateDiff(
+                        Now(),
+                        Date(1899, 12, 30),
+                        TimeUnit.Seconds
+                    ) / 86400,
+                    DepartmentCode: varUser.DepartmentCode,
+                    Name: varUser.FullName,
+                    New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                    New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                    Current_AssignedTo_Person: Blank(),
+                    Current_AssignedTo_Department: Blank(),
+                    'Field Updated': Concat(
+                        Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                        FieldName,
+                        "|||"
+                    ),
+                    NewValue: Concat(
+                        Filter(colFieldPairs, NewValue<>"" && !IsBlank(NewValue)),
+                        Text(NewValue),
+                        "|||"
+                    )
+                }
+            )
+        )
+    );
+    Patch(
+        PNQ_Department_Employee_Tables,
+        LookUp(
+            PNQ_Department_Employee_Tables,
+            Employee_Code = varUser.EmployeeCode
+        ),
+        {
+            Last_Sequence: Max(
+                colCreateQueue,
+                Value(Right(DocNo, 5))
+            )
+        }
+    );
+    Set(UserLastSequence, UserLastSequence + CountRows(colCreateQueue)-1);
+    If(
+        CountRows(colCreateQueue) = 1,
+        Notify(
+            "Record saved successfully. Doc No: " & First(colCreateQueue).DocNo,
+            NotificationType.Success
+        ),
+        Notify(
+            CountRows(colCreateQueue)&" Records saved successfully. Doc No(s): " &
+            Concat(
+                colCreateQueue,
+                Text(DocNo),
+                ", "
+            ),
+            NotificationType.Success
+        )
+    );
+    ,
+    // Update Record
+    Set(
+        varBatchRootDocNo,
+        Coalesce(
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).queryDetails.BatchDocNo,
+            LookUp(
+                colOpenTabs,
+                TabID = varActiveTabID
+            ).DocNo
+        )
+    );
+
+    If(
+        LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+        //Update Group - only the parts that are NOT Closed (change of 2026-11-13).
+        //A closed part stays in the group, but group edit no longer changes it:
+        //no field changes, no history comment, no Misses Tracker row.
+        //All parts of the group (this filter returns every part), then the Closed ones are
+        //removed here in the app. Asking Dataverse for "not Closed" together with the group
+        //number returned only some of the open parts (fix of 2026-11-15).
+        ClearCollect(
+            colGroupOpenParts,
+            Filter(PNQ_Backlogs, BatchDocNo = varBatchRootDocNo)
+        );
+        RemoveIf(
+            colGroupOpenParts,
+            'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed
+        );
+        //Status and Date Closed are written ONLY if Status was changed in this group edit
+        //(Status is then in fieldsUpdated). Otherwise each open part keeps its own Status
+        //(e.g. Open or Interim) and its own Date Closed.
+        Set(
+            varGroupStatusChanged,
+            !IsEmpty(
+                Filter(
+                    LookUp(colOpenTabs, TabID = varActiveTabID).fieldsUpdated,
+                    FieldName = "Status"
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As OpenPart,
+            With(
+                {
+                    _part: LookUp(PNQ_Backlogs, DocNo = OpenPart.DocNo)
+                },
+                Patch(
+                    PNQ_Backlogs,
+                    _part,
+                    {
+                        ACModel: custACModal.Selected.Aircraft_Model,
+                        ACType: custACType.Selected.Value,
+                        AssignedDept: selectAssignedDept.Selected.Value,
+                        CreatedDate: dtpCreatedDate.SelectedDate,
+                        Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                        'Date Closed': If(varGroupStatusChanged, dtpClosedDate.SelectedDate, _part.'Date Closed'),
+                        Originator: txtOriginator.Text,
+                        OriginatorDept: txtOriginatorDept.Text,
+                        Priority: cmbPriority.Selected.Value,
+                        'Status (cr7ba_pnqstatus)': If(varGroupStatusChanged, cmbStatus.Selected.Value, _part.'Status (cr7ba_pnqstatus)'),
+                        Subject: pnqSubject.Selected.Key,
+                        'Need Date': dtpNeedDate.SelectedDate,
+                        AssignedTo: selectAssignedTo.Selected.Person
+                    }
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As OpenPart,
+            With(
+                {
+                    _details: LookUp(Query_Details, DocNo = OpenPart.DocNo)
+                },
+                If(
+                    !IsBlank(_details),
+                    Patch(
+                        Query_Details,
+                        _details,
+                        {
+                            AircraftSerialNumber: txtAircraftSerial.Text,
+                            CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                            ContactName: txtCustomerName.Text,
+                            CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                            Query_Description: txtQueryDesc.Text,
+                            'Sales Order': txtSalesOrder.Text,
+                            'Quote Number': txtQuoteNumber.Text,
+                            NHA: txtNHA.Text,
+                            TechRef: txtTechRef.Text,
+                            PricingComments: txtPricingComments.Text,
+                            VendorName: txtVendorName.Text,
+                            'Vendor list Price': Value(txtVendorList.Text),
+                            VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                            BombardierCost: Value(txtBBDCost.Text),
+                            BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                            LeadTime: txtLeadTime.Text,
+                            Solution: txtSolution.Text,
+                            LockedByUserEmail: "",
+                            lockedByUserAtTime: Blank(),
+                            PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                            ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                            SalesforceCaseNumber: txtCaseNumber.Text,
+                            iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                            iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                            iQueryQualityFailureReasonComments: FailureComments.Text
+                        }
+                    )
+                )
+            )
+        );
+        ForAll(
+            colGroupOpenParts As BacklogRec,
+            With(
+                {
+                    UserLastComment: First(
+                        SortByColumns(
+                            Filter(
+                                PNQ_Comments,
+                                DocNo = BacklogRec.DocNo
+                            ),
+                            "cr7ba_commentidentifier",
+                            SortOrder.Descending
+                        )
+                    )
+                },
+                Patch(
+                    PNQ_Comments,
+                    Defaults(PNQ_Comments),
+                    {
+                        DocNo: UserLastComment.DocNo,
+                        BatchDocNo: UserLastComment.BatchDocNo,
+                        CommentID: UserLastComment.CommentID+1,
+                        CommentText: CommentsRichTextEditor.HtmlText,
+                        DateTime: Now(),
+                        //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                        DateTimeUTC: DateDiff(
+                            Now(),
+                            Date(1899,12,30),
+                            TimeUnit.Seconds
+                        ) / 86400,
+                        Department: varUser.Department,
+                        DepartmentCode: varUser.DepartmentCode,
+                        Name: User().FullName,
+                        New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                        New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                        Current_AssignedTo_Person: UserLastComment.New_AssignedTo_Person,
+                        Current_AssignedTo_Department: UserLastComment.New_AssignedTo_Department,
+                        'Field Updated':
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                FieldName,
+                                "|||"
+                            ),
+                        NewValue:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Text(NewValue),
+                                "|||"
+                            ),
+                        OldValue:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Text(OldValue),
+                                "|||"
+                            ),
+                        ReasonForFieldUpdate:
+                            Concat(
+                                LookUp(
+                                    colOpenTabs,
+                                    TabID = varActiveTabID
+                                ).fieldsUpdated,
+                                Reason,
+                                "|||"
+                            )
+                    }
+                );
+
+                If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+                        &&
+                    LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+                        &&
+                    selectAssignedDept.Selected.Value <> "Configuration Management"
+                        &&
+                    varUser.Department = "Configuration Management",
+
+                    Patch(
+                        iQuery_MissesTrackers,
+                        Defaults(iQuery_MissesTrackers),
+                        {
+                            DocNo: BacklogRec.DocNo,
+                            MissUpdate: If(PassFailDropdown.Selected.Value = "Pass", 'MissUpdate (iQuery_MissesTrackers)'.Pass, 'MissUpdate (iQuery_MissesTrackers)'.Fail),
+                            FullName: varUser.FullName,
+                            FailureComments: TextInputReasonForFail.Text,
+                            FailReason: FailReasonCombobox.Selected.Reason,
+                            BatchDocNo: LookUp(colOpenTabs,TabID = varActiveTabID).batchDocNo
+                        }
+                    )
+                );
+            )
+        );,
+        //Update single
+        Patch(
+            PNQ_Backlogs,
+            LookUp(
+                PNQ_Backlogs,
+                DocNo = LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).DocNo
+            ),
+            {
+                ACModel: custACModal.Selected.Aircraft_Model,
+                ACType: custACType.Selected.Value,
+                AssignedDept: selectAssignedDept.Selected.Value,
+                CreatedDate: dtpCreatedDate.SelectedDate,
+                Customer: cmblblAircraftOwner.Selected.'Owner Name',
+                'Date Closed': dtpClosedDate.SelectedDate,
+                NumberOfParts: Value(txtNumParts.Text),
+                Originator: txtOriginator.Text,
+                OriginatorDept: txtOriginatorDept.Text,
+                Priority: cmbPriority.Selected.Value,
+                'Status (cr7ba_pnqstatus)': cmbStatus.Selected.Value,
+                Subject: pnqSubject.Selected.Key,
+                'Need Date': dtpNeedDate.SelectedDate,
+                AssignedTo: selectAssignedTo.Selected.Person
+            }
+        );
+
+        Patch(
+            Query_Details,
+            LookUp(
+                Query_Details,
+                DocNo = LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ).DocNo
+            ),
+            {
+                AircraftSerialNumber: txtAircraftSerial.Text,
+                CustomerID: cmblblAircraftOwner.Selected.'Owner Name',
+                ContactName: txtCustomerName.Text,
+                CustomerAccountNumber: If(LookUp(colOpenTabs, TabID = varActiveTabID).customerNumberNotfound, txtCustomerAccountNumber.Text ,cmbAccountNumber.Selected.customer_number_v2),
+                PartsDivision: selectPartsDivision.Selected.Value,
+                AlternativePartNumber: txtAltPartNumber.Text,
+                Query_Description: txtQueryDesc.Text,
+                'Sales Order': txtSalesOrder.Text,
+                'Quote Number': txtQuoteNumber.Text,
+                NHA: txtNHA.Text,
+                TechRef: txtTechRef.Text,
+                PricingComments: txtPricingComments.Text,
+                VendorName: txtVendorName.Text,
+                'Vendor list Price': Value(txtVendorList.Text),
+                VendorCurrency: selectVendorCurrencyUnit.Selected.Value,
+                BombardierCost: Value(txtBBDCost.Text),
+                BBDCurrency: selectBBDCurrencyUnit.Selected.Value,
+                LeadTime: txtLeadTime.Text,
+                Solution: txtSolution.Text,
+                LockedByUserEmail: "",
+                lockedByUserAtTime: Blank(),
+                PastedAttachments: RichTextEditor_Pasted_Attachment.HtmlText,
+                ZendeskTicketNumber: txtTicketCaseNumber.Text,
+                SalesforceCaseNumber: txtCaseNumber.Text,
+                iQueryResponseQuality: Dropdown_iQueryResponseQuality.Selected.Value,
+                iQueryQualityFailureReason: ComboBox_iQueryFailureReason.Selected.Value,
+                iQueryQualityFailureReasonComments: FailureComments.Text
+            }
+        );
+
+        Patch(
+            PNQ_Comments,
+            Defaults(PNQ_Comments),
+            {
+                DocNo: LookUp(colOpenTabs, TabID = varActiveTabID).DocNo,
+                BatchDocNo: LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo,
+                CommentID: Coalesce(
+                    Max(
+                        Filter(
+                            PNQ_Comments,
+                            DocNo = LookUp(colOpenTabs, TabID = varActiveTabID).DocNo
+                        ),
+                        CommentID
+                    ),
+                    0
+                )+1,
+                CommentText: CommentsRichTextEditor.HtmlText,
+                DateTime: Now(),
+                //DateTimeValue(Text(Now(), "[$-en-US]m/d/yyyy h:mm AM/PM")),
+                DateTimeUTC: DateDiff(
+                    Now(),
+                    Date(1899,12,30),
+                    TimeUnit.Seconds
+                ) / 86400,
+                Department: varUser.Department,
+                DepartmentCode: varUser.DepartmentCode,
+                Name: User().FullName,
+                New_AssignedTo_Person: selectAssignedTo.Selected.Person,
+                New_AssignedTo_Department: selectAssignedDept.Selected.Value,
+                Current_AssignedTo_Person: If(varUser.FullName = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedTo),
+                Current_AssignedTo_Department: If(varUser.Department = LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept, Blank(), LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept),
+                'Field Updated':
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        FieldName,
+                        "|||"
+                    ),
+                NewValue:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Text(NewValue),
+                        "|||"
+                    ),
+                OldValue:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Text(OldValue),
+                        "|||"
+                    ),
+                ReasonForFieldUpdate:
+                    Concat(
+                        LookUp(
+                            colOpenTabs,
+                            TabID = varActiveTabID
+                        ).fieldsUpdated,
+                        Reason,
+                        "|||"
+                    )
+            }
+        );
+        If(LookUp(colOpenTabs, TabID = varActiveTabID).isEditing
+                &&
+            LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.AssignedDept = "Configuration Management"
+                &&
+            selectAssignedDept.Selected.Value <> "Configuration Management"
+                &&
+            varUser.Department = "Configuration Management",
+
+            Patch(
+                iQuery_MissesTrackers,
+                Defaults(iQuery_MissesTrackers),
+                {
+                    DocNo: LookUp(colOpenTabs, TabID = varActiveTabID).DocNo,
+                    MissUpdate: If(PassFailDropdown.Selected.Value = "Pass", 'MissUpdate (iQuery_MissesTrackers)'.Pass, 'MissUpdate (iQuery_MissesTrackers)'.Fail),
+                    FullName: varUser.FullName,
+                    FailureComments: TextInputReasonForFail.Text,
+                    FailReason: FailReasonCombobox.Selected.Reason,
+                    BatchDocNo: ""
+                }
+            )
+        );
+    );
+
+    If(
+        LookUp(colOpenTabs, TabID = varActiveTabID).isBatchEditing,
+        Notify(
+            CountRows(colGroupOpenParts)&" Records saved successfully. Doc No(s): " &
+            Concat(
+                colGroupOpenParts,
+                Text(DocNo),
+                ", "
+            ),
+            NotificationType.Success
+        ),
+        Notify(
+            "Record saved successfully. Doc No: " & varBatchRootDocNo,
+            NotificationType.Success
+        )
+    );
+);
+// Switch to previous tab if this was active
+/*If(LookUp(colOpenTabs, TabID = varActiveTabID).TabID = varActiveTabID,
+Set(varActiveTabID,   Last(colOpenTabs).TabID);
+Set(varActiveTabType, Last(colOpenTabs).TabType);
+Set(varActiveDocNo,   Last(colOpenTabs).DocNo);
+);*/
+
+// Close tab and return to list after EVERY save (change of 2026-11-15): also one part of a
+// group and "Assign and Save", which used to keep the tab open in edit mode.
+Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
+Set(varActiveTabID,   "tab_home");
+Set(varActiveTabType, "list");
+Set(varActiveDocNo,   "");
+Set(varFormError,     "");
+Reset(pnqSubject);
+Reset(txtQueryDesc);
+Reset(txtTicketCaseNumber);
+Reset(txtCaseNumber);
+Refresh(PNQ_Backlogs);
+Refresh(Query_Details);
+Refresh(PNQ_Comments);
+With(
+    {
+        _AOG:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "AOG"
+                )
+            ),
+
+        _Critical:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Critical"
+                )
+            ),
+
+        _Quote:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Customer Quote"
+                )
+            ),
+
+        _Routine:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Priority" &&
+                    FilterValue = "Routine"
+                )
+            ),
+
+        _Open:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Open"
+                )
+            ),
+
+        _Interim:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Interim"
+                )
+            ),
+
+        _Close:
+            !IsBlank(
+                LookUp(
+                    colFilters,
+                    FilterType = "Status" &&
+                    FilterValue = "Close"
+                )
+            )
+    },
+
+    ClearCollect(
+        PNQ_DB_ListAll,
+
+        Filter(
+            PNQ_Backlogs,
+
+            // Priority
+            (
+                !_AOG &&
+                !_Critical &&
+                !_Quote &&
+                !_Routine
+            )
+            ||
+            (
+                _AOG &&
+                Priority = 'Priority (PNQ_Backlogs)'.AOG
+            )
+            ||
+            (
+                _Critical &&
+                Priority = 'Priority (PNQ_Backlogs)'.Critical
+            )
+            ||
+            (
+                _Quote &&
+                Priority = 'Priority (PNQ_Backlogs)'.'Customer Quote'
+            )
+            ||
+            (
+                _Routine &&
+                Priority = 'Priority (PNQ_Backlogs)'.Routine
+            ),
+
+            // Status
+            (
+                !_Open &&
+                !_Interim &&
+                !_Close
+            )
+            ||
+            (
+                _Open &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Open
+            )
+            ||
+            (
+                _Interim &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Interim
+            )
+            ||
+            (
+                _Close &&
+                'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed
+            ),
+
+            (IsEmpty(ComboBox1.SelectedItems) || IsBlank(ComboBox1.SelectedItems)) ||
+            AssignedDept in ComboBox1.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_1.SelectedItems) || IsBlank(ComboBox1_1.SelectedItems)) ||
+            AssignedTo in ComboBox1_1.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_2.SelectedItems) || IsBlank(ComboBox1_2.SelectedItems)) ||
+            Originator in ComboBox1_2.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_3.SelectedItems) || IsBlank(ComboBox1_3.SelectedItems)) ||
+            OriginatorDept in ComboBox1_3.SelectedItems.Value,
+
+            (IsEmpty(ComboBox1_4.SelectedItems) || IsBlank(ComboBox1_4.SelectedItems)) ||
+            Customer in ComboBox1_4.SelectedItems.Value,
+
+            IsBlank(DatePicker_From_1.SelectedDate) ||
+            CreatedDate >= DatePicker_From_1.SelectedDate,
+
+            IsBlank(DatePicker_To_1.SelectedDate) ||
+            CreatedDate <= DatePicker_To_1.SelectedDate
+        )
+    )
+);
+Reset(PassFailDropdown);
+Reset(FailReasonCombobox);
+Reset(TextInputReasonForFail);
+Set(showLoader, false);
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+- Paste BEFORE - CHANGE 2 back into HiddenSaveButton > OnSelect.
+- Paste BEFORE - CHANGE 1 back into btnSaveClose > OnSelect.
+- Undo both together.
+
+TESTING (in dev)
+NOT TESTED YET.
+Impact check done: both BEFORE blocks copied from the 154_4 zip by script. AFTER differs only
+where described (diff checked: CHANGE 1 one 26-line block removed, CHANGE 2 the last If
+replaced by its close statements). Every reader and writer of showAutoAssignConfirmModal, and
+every caller of btnSaveClose, HiddenSaveButton and SubmitForm(Form1), checked.
+After pasting: App Checker -> no new errors. Performance: no delegation warning on
+btnSaveClose.OnSelect or HiddenSaveButton.OnSelect. Save, Publish, then test in the PUBLISHED
+dev app (not Studio preview).
+T1  One part of a group, yours: Edit Form on part B, add a comment, Save -> "Record saved
+    successfully. Doc No: <first part's Doc No>" -> back to the home list. Open B again: the
+    comment is in B's history once. No "Assignment Confirmation" pop-up during the save.
+T2  Same as T1 but also attach a file (record 03) -> home list. Open any part: the file is
+    there, once.
+T3  One part, Status Interim + reason + Save -> home list. Only B is Interim (record 04).
+T4  One part, Status Closed -> "Save & Close Request" -> home list, B is Closed (as before).
+T5  Single query (not a group), yours: comment + Save -> home list (as before).
+T6  Edit whole group: comment + Save -> home list. All open parts have the comment (as before).
+T7  Query NOT yours (single): Edit Form -> "Assign to yourself" -> "Assign and Save" ->
+    home list. Open it: Assigned To = you, "Reassigned" history entry. Click Edit Form: you
+    can edit it normally.
+T8  Same as T7 on one part of a group, and on "Edit whole group" -> home list each time.
+T9  "Assign to yourself" -> "Close" on the pop-up -> nothing saved, still in edit (as before).
+T10 Save with nothing changed -> "No changes made..." error, stays in edit (as before).
+T11 Change Assigned Department to another department, no comment -> "Please add a comment
+    describing your changes." -> stays in edit (as before). Add a comment, Save -> home list.
+T12 New Request (1 part and 3 parts) -> created, home list (as before).
+T13 Lock: after T1, a second user clicks Edit Form on B -> can edit.
+T14 Two tabs open (query X and part B): save B -> home list. X is still in the tab bar.
+T15 New Request -> pick YOURSELF in Assigned To -> "Assignment Confirmation" pop-up ->
+    "Assign and Save" -> home list. The query is created ONCE (search its Doc No).
+T16 After T1, open another existing query and click Edit Form: the comment box is empty.
