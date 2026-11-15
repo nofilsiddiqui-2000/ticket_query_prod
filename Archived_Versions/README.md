@@ -8,15 +8,16 @@ Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 ## Current version (repo root)
 
-- `iQuery_Dev_153_20261113174127.zip`: last saved 2026-11-13 17:35 UTC.
-  Includes Change_History 01, 02 and 03 (03 = one group part can add attachments + bigger
-  file box; 02 and 03 are PENDING TEST, applied in dev). Only the 8 properties of record 03
-  differ from the 13 Nov 05:09 export.
+- `iQuery_Dev_153_20261115042618.zip`: exported 2026-11-15 04:26 UTC, app last saved
+  2026-11-13 17:35 UTC. The app inside is byte-for-byte the same as
+  `iQuery_Dev_153_20261113174127.zip` (re-exported to confirm the current dev version).
+  Includes Change_History 01, 02 and 03. Change_History 04 (status per part) is NOT in it.
 
 ## Archived
 
 | File | App version | Last saved (UTC) | Notes |
 |---|---|---|---|
+| `iQuery_Dev_153_20261113174127.zip` | - | 2026-11-13 17:35 | Includes Change_History 01, 02 and 03 (02 and 03 applied in dev). Base for Change_History 04. Same app as the 15 Nov re-export. |
 | `iQuery_Dev_20261113051208.zip` | - | 2026-11-13 05:09 | Includes Change_History 01 and 02 (02 applied in dev). Base for Change_History 03. |
 | `iQuery_Dev_12_Nov_20261113023644.zip` | v1.52 | 2026-11-12 02:02 | Includes Change_History 01. Published to production (confirmed 2026-11-12). Base for Change_History 02. |
 | `iQuery_Dev_11_Nov_v2_20261112021619.zip` | v1.52 | 2026-11-12 02:02 | Same app as the 12 Nov export (identical .msapp); first export with Change_History 01. |
