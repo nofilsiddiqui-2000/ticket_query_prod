@@ -26,6 +26,17 @@ Status:     PENDING TEST - not yet tested in dev.
             not confirmed. The new code asks Dataverse only "group number = X" (gave 21) and
             "Status = Closed" (gave 1) and leaves out the closed parts in the app. If you pasted
             the 13 Nov AFTER of CHANGE 3, 4 or 5 in dev, paste the new AFTER over it.
+            2026-11-15 CORRECTION 2 (CHANGE 5 only, one line): the bar then showed "21 of 21 ...
+            Closed parts (0)" (should be 20 / 1). CAUSE CONFIRMED in export
+            iQuery_Dev_154_3_20261115052040.zip (last saved 05:18 UTC): App Checker gives a
+            delegation warning on "BatchDocNo = _tab.batchDocNo" in Label41 (_tab is the With
+            record of the tab). Power Apps can't send that to Dataverse, so it checks only the
+            first rows of PNQ_Backlogs (more than 50,000 rows) in the app and misses the new
+            group's rows. The 13 Nov bar used the same _tab.batchDocNo, which gave "4 of 21".
+            The part count in the same formula uses LookUp(colOpenTabs, TabID =
+            varActiveTabID).batchDocNo: no warning, correct (21). Fix: the Closed count uses
+            that same expression. HiddenSaveButton and Button9 never used _tab and have no
+            delegation warning in this export (same App Checker items as before record 04).
 
 WHY
 - When you click Edit Form on ONE part of a group, the grey cover Container31 lies over the
@@ -2262,7 +2273,9 @@ STEP 3: Property dropdown: Text
 STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
 What this changes: in group edit, the bar says how many parts will be changed
 ("Group edit: your changes apply to 2 of 3 parts in group X. Closed parts (1) are not
-changed."). Open = all parts - Closed parts. The text on one part is unchanged.
+changed."). Open = all parts - Closed parts. Both counts use LookUp(colOpenTabs, TabID =
+varActiveTabID).batchDocNo, never _tab.batchDocNo (that one is not delegable, see Status).
+The text on one part is unchanged.
 ---------------------------- BEFORE - CHANGE 5 ----------------------------
 With(
     {_tab: LookUp(colOpenTabs, TabID = varActiveTabID)},
@@ -2310,7 +2323,7 @@ With(
                         _closed: CountRows(
                             Filter(
                                 PNQ_Backlogs,
-                                BatchDocNo = _tab.batchDocNo,
+                                BatchDocNo = LookUp(colOpenTabs, TabID = varActiveTabID).batchDocNo,
                                 'Status (cr7ba_pnqstatus)' = 'Status (PNQ_Backlogs)'.Closed
                             )
                         )
