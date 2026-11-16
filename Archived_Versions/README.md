@@ -8,15 +8,17 @@ Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 ## Current version (repo root)
 
-- `iQuery_Dev_154_4_20261115054503.zip` (app iQuery_Dev_154_4): last saved 2026-11-15 05:41 UTC.
-  Includes Change_History 01, 02, 03 and 04 (04 with both 2026-11-15 corrections); every AFTER
-  checked against it. Temporary test label removed. Published to the TEST environment on
-  2026-11-15 (user testing ongoing). Base for the next work.
+- `iQuery_Dev_154_5_20261116034138.zip` (app iQuery_Dev_154_5): last saved 2026-11-16 03:40 UTC.
+  Includes Change_History 01-05 (05 = final version: after Save stay on the same query in view
+  mode). Both record 05 AFTER blocks match it exactly. Published to the TEST environment on
+  2026-11-16 for user testing. Base for the next work.
 
 ## Archived
 
 | File | App version | Last saved (UTC) | Notes |
 |---|---|---|---|
+| `iQuery_15_November_20261116022020.zip` | - | 2026-11-15 05:41 | Exported 2026-11-16 02:20 UTC, but identical to `iQuery_Dev_154_4` file by file (record 05 was pasted but not saved before this export). |
+| `iQuery_Dev_154_4_20261115054503.zip` | - | 2026-11-15 05:41 | Records 01-04 (04 with both 2026-11-15 corrections). Published to the TEST environment on 2026-11-15. Base for Change_History 05. |
 | `iQuery_Dev_154_3_20261115052040.zip` | - | 2026-11-15 05:18 | Records 01-04 with record 04 correction 1 (Label41 still had the _tab.batchDocNo delegation bug) + temporary count_debug_label. |
 | `iQuery_Dev_153_20261115042618.zip` | - | 2026-11-13 17:35 | Re-export (2026-11-15) of the same app as `iQuery_Dev_153_20261113174127.zip`. Records 01-03. Record 04 not in it. |
 | `iQuery_Dev_153_20261113174127.zip` | - | 2026-11-13 17:35 | Includes Change_History 01, 02 and 03 (02 and 03 applied in dev). Base for Change_History 04. Same app as the 15 Nov re-export. |
