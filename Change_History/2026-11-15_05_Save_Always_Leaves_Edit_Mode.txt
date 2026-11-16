@@ -47,6 +47,19 @@ Status:     PENDING TEST - not yet tested in dev.
             merged INTO the tab's own records (Patch(<tab>.queryDetails, saved row)), the main
             developer's pattern (Patch(secondaryDetails, tempSecondaryDetails)). Only those 4
             lines changed. Review: SAFE WITH NOTES (type check confirmed by Studio only).
+            2026-11-16: that version is in iQuery_Dev_154_5_20261116034138.zip (last saved
+            03:40 UTC), published to the TEST environment for user testing.
+            2026-11-16 CORRECTION (bug found by Nofil in dev): after "Assign to yourself" ->
+            "Assign and Save", Edit Form on the same tab was greyed out (closing and reopening
+            the tab worked). Label test: Dataverse had the user, the tab's queryDetails still
+            had the old owner, tempQueryDetails had the user. So the read-back row came back
+            WITHOUT those columns: the app has explicit column selection (projectionmapping),
+            and merging the whole row made Power Apps download none of the columns. The
+            read-back refreshed nothing. FIX: the 4 merges now NAME every column the save
+            writes (14 PNQ_Backlogs + 27 Query_Details columns, logical names, as the field
+            OnChange handlers do). Only HiddenSaveButton.OnSelect changes; CHANGE 1 unchanged.
+            Review: SAFE WITH NOTES (82 names checked against DataSources.json, 0 mismatches;
+            compile confirmed by Studio only).
             Not a runtime test.
 
 WHY
@@ -110,8 +123,9 @@ IMPACT / RISK
     open tab today).
 
 THE CHANGE (2 changes, both on screen PartsQuerySystem, do them in order, same session)
-CHANGE 1 is the same as in the first version. If you already pasted it, you can skip it.
-CHANGE 2 is NEW: paste it even if you pasted the first version.
+CHANGE 1 is the same as in the first version. It is already in iQuery_Dev_154_5: skip it.
+CHANGE 2 was corrected on 2026-11-16 (named columns): paste it again, it replaces the whole
+formula.
 
 ==================== CHANGE 1 ====================
 STEP 1: Screen: PartsQuerySystem
@@ -2286,19 +2300,121 @@ If(
                     TabID = varActiveTabID
                 ),
                 {
-                    // The saved values are merged INTO the tab's own records, so they keep the
-                    // shape colOpenTabs was created with (Patch needs the same columns).
-                    queryDetails: Patch(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails, _savedBacklog),
-                    tempQueryDetails: Patch(LookUp(colOpenTabs, TabID = varActiveTabID).tempQueryDetails, _savedBacklog),
+                    // Every saved column is NAMED here. The app has "explicit column selection":
+                    // Power Apps only downloads the columns a formula names. Merging the whole row
+                    // downloaded none of them, so the tab kept its old values (2026-11-16 test:
+                    // Assigned To stayed the old person after "Assign and Save" -> fields locked).
+                    // The values are merged INTO the tab's own records (same shape for Patch),
+                    // with the tables' logical names, as the field OnChange handlers do.
+                    queryDetails: Patch(
+                        LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails,
+                        {
+                            cr7ba_aircraftmodel: _savedBacklog.ACModel,
+                            cr7ba_aircrafttype: _savedBacklog.ACType,
+                            cr7ba_assigneddepartment: _savedBacklog.AssignedDept,
+                            cr7ba_assignedto: _savedBacklog.AssignedTo,
+                            cr7ba_closuredate: _savedBacklog.'Date Closed',
+                            cr7ba_creationdate: _savedBacklog.CreatedDate,
+                            cr7ba_customer: _savedBacklog.Customer,
+                            cr7ba_needdate: _savedBacklog.'Need Date',
+                            cr7ba_originatorname: _savedBacklog.Originator,
+                            cr7ba_originatingdepartment: _savedBacklog.OriginatorDept,
+                            cr7ba_pnqstatus: _savedBacklog.'Status (cr7ba_pnqstatus)',
+                            cr7ba_prioritylevel: _savedBacklog.Priority,
+                            cr7ba_quantityofparts: _savedBacklog.NumberOfParts,
+                            cr7ba_requestsubject: _savedBacklog.Subject
+                        }
+                    ),
+                    tempQueryDetails: Patch(
+                        LookUp(colOpenTabs, TabID = varActiveTabID).tempQueryDetails,
+                        {
+                            cr7ba_aircraftmodel: _savedBacklog.ACModel,
+                            cr7ba_aircrafttype: _savedBacklog.ACType,
+                            cr7ba_assigneddepartment: _savedBacklog.AssignedDept,
+                            cr7ba_assignedto: _savedBacklog.AssignedTo,
+                            cr7ba_closuredate: _savedBacklog.'Date Closed',
+                            cr7ba_creationdate: _savedBacklog.CreatedDate,
+                            cr7ba_customer: _savedBacklog.Customer,
+                            cr7ba_needdate: _savedBacklog.'Need Date',
+                            cr7ba_originatorname: _savedBacklog.Originator,
+                            cr7ba_originatingdepartment: _savedBacklog.OriginatorDept,
+                            cr7ba_pnqstatus: _savedBacklog.'Status (cr7ba_pnqstatus)',
+                            cr7ba_prioritylevel: _savedBacklog.Priority,
+                            cr7ba_quantityofparts: _savedBacklog.NumberOfParts,
+                            cr7ba_requestsubject: _savedBacklog.Subject
+                        }
+                    ),
                     secondaryDetails: If(
                         IsBlank(_savedDetails),
                         LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
-                        Patch(LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails, _savedDetails)
+                        Patch(
+                            LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+                            {
+                                cr7ba_aircraftserialnumber: _savedDetails.AircraftSerialNumber,
+                                cr7ba_customerid: _savedDetails.CustomerID,
+                                cr7ba_customername: _savedDetails.ContactName,
+                                cr7ba_customeraccountnumber: _savedDetails.CustomerAccountNumber,
+                                cr7ba_partsdivision: _savedDetails.PartsDivision,
+                                cr7ba_alternativepartnumber: _savedDetails.AlternativePartNumber,
+                                cr7ba_query_description: _savedDetails.Query_Description,
+                                cr7ba_salesorder: _savedDetails.'Sales Order',
+                                cr7ba_quotenumber: _savedDetails.'Quote Number',
+                                cr7ba_nha: _savedDetails.NHA,
+                                cr7ba_technicalreference: _savedDetails.TechRef,
+                                cr7ba_pricingcomments: _savedDetails.PricingComments,
+                                cr7ba_vendorname: _savedDetails.VendorName,
+                                cr7ba_vendorlistprice: _savedDetails.'Vendor list Price',
+                                cr7ba_vendorcurrency: _savedDetails.VendorCurrency,
+                                cr7ba_bombardiercost: _savedDetails.BombardierCost,
+                                cr7ba_bbdcurrency: _savedDetails.BBDCurrency,
+                                cr7ba_leadtime: _savedDetails.LeadTime,
+                                cr7ba_solution: _savedDetails.Solution,
+                                cr7ba_lockedbyuseremail: _savedDetails.LockedByUserEmail,
+                                cr7ba_lockedbyuserattime: _savedDetails.lockedByUserAtTime,
+                                cr7ba_pastedattachments: _savedDetails.PastedAttachments,
+                                cr7ba_ticketcasenumber: _savedDetails.ZendeskTicketNumber,
+                                cr7ba_salesforcecasenumber: _savedDetails.SalesforceCaseNumber,
+                                cr7ba_iqueryresponsequality: _savedDetails.iQueryResponseQuality,
+                                cr7ba_iqueryqualityfailurereason: _savedDetails.iQueryQualityFailureReason,
+                                cr7ba_iqueryqualityfailurereasoncomments: _savedDetails.iQueryQualityFailureReasonComments
+                            }
+                        )
                     ),
                     tempSecondaryDetails: If(
                         IsBlank(_savedDetails),
                         LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails,
-                        Patch(LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails, _savedDetails)
+                        Patch(
+                            LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails,
+                            {
+                                cr7ba_aircraftserialnumber: _savedDetails.AircraftSerialNumber,
+                                cr7ba_customerid: _savedDetails.CustomerID,
+                                cr7ba_customername: _savedDetails.ContactName,
+                                cr7ba_customeraccountnumber: _savedDetails.CustomerAccountNumber,
+                                cr7ba_partsdivision: _savedDetails.PartsDivision,
+                                cr7ba_alternativepartnumber: _savedDetails.AlternativePartNumber,
+                                cr7ba_query_description: _savedDetails.Query_Description,
+                                cr7ba_salesorder: _savedDetails.'Sales Order',
+                                cr7ba_quotenumber: _savedDetails.'Quote Number',
+                                cr7ba_nha: _savedDetails.NHA,
+                                cr7ba_technicalreference: _savedDetails.TechRef,
+                                cr7ba_pricingcomments: _savedDetails.PricingComments,
+                                cr7ba_vendorname: _savedDetails.VendorName,
+                                cr7ba_vendorlistprice: _savedDetails.'Vendor list Price',
+                                cr7ba_vendorcurrency: _savedDetails.VendorCurrency,
+                                cr7ba_bombardiercost: _savedDetails.BombardierCost,
+                                cr7ba_bbdcurrency: _savedDetails.BBDCurrency,
+                                cr7ba_leadtime: _savedDetails.LeadTime,
+                                cr7ba_solution: _savedDetails.Solution,
+                                cr7ba_lockedbyuseremail: _savedDetails.LockedByUserEmail,
+                                cr7ba_lockedbyuserattime: _savedDetails.lockedByUserAtTime,
+                                cr7ba_pastedattachments: _savedDetails.PastedAttachments,
+                                cr7ba_ticketcasenumber: _savedDetails.ZendeskTicketNumber,
+                                cr7ba_salesforcecasenumber: _savedDetails.SalesforceCaseNumber,
+                                cr7ba_iqueryresponsequality: _savedDetails.iQueryResponseQuality,
+                                cr7ba_iqueryqualityfailurereason: _savedDetails.iQueryQualityFailureReason,
+                                cr7ba_iqueryqualityfailurereasoncomments: _savedDetails.iQueryQualityFailureReasonComments
+                            }
+                        )
                     ),
                     isEditing: false,
                     isBatchEditing: false,
@@ -2557,5 +2673,14 @@ T23 After a save, wait 3 minutes on the query: no timeout pop-up, the tab stays 
 T24 Close the query tab with X after a save -> it closes without a "discard changes" question.
 T25 After any save, check that EVERY field of the query shows its value in view mode, also
     the ones you didn't change (customer, aircraft, vendor, solution, dates...).
+T26 (2026-11-16 correction) Query NOT yours (not a group part): Edit Form -> Assign to
+    yourself -> Assign and Save -> view mode. Click Edit Form on the SAME tab: fields editable,
+    no grey cover, "Add New Comment" works; add a comment, Save -> saved.
+T27 After any save, view mode still shows the saved Status, Priority, Need Date, Subject,
+    Customer and Query Description (NOT blank). If anything is blank: stop and report.
+T28 Change Subject + comment, Save -> the Subject box shows the new subject. Edit Form -> Save
+    with nothing changed -> "No changes made..." (no stray "Subject" change).
+T29 Reassign to someone in another department + comment, Save -> view mode; Edit Form -> the
+    query is locked for you and "Assign to yourself" shows (correct: it's no longer yours).
 Not testable without forcing a Dataverse read failure: the "could not be shown again" warning
 (fallback). It only runs when the query can't be read back right after the save.
