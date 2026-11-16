@@ -1,81 +1,92 @@
-CHANGE RECORD 05 - Every successful Save leaves edit mode (one part of a group, Assign and Save)
+CHANGE RECORD 05 - Every successful Save leaves edit mode and stays on the same query (view mode)
 ==============================================================================
 Record:     05
 Date:       2026-11-15
 Made by:    Nofil (with Claude Code)
-Type:       Bug fix (saving)
+Type:       Bug fix (saving) + user feedback (stay on the query after Save)
 Based on:   iQuery_Dev_154_4_20261115054503.zip (last saved 2026-11-15 05:41 UTC).
             Includes Change_History 01-04 (02, 03 and 04 are in the TEST environment).
             Both BEFORE blocks below were copied from this zip by script. Record 04 CHANGE 3
             also changed HiddenSaveButton.OnSelect: its AFTER is this record's BEFORE - CHANGE 2.
 Status:     PENDING TEST - not yet tested in dev.
-            Independent static review 1 (2026-11-15, subagent): PASS WITH NOTES. The notes
-            were added (validation is skipped on "Assign and Save", which is existing
-            behaviour; New Request + pick yourself; comment-box test).
-            Independent static review 2 (2026-11-15, Nofil's reviewer): "CHANGES REQUIRED",
-            asking for a write-success check (IfError) before the tab closes. Not added here,
-            see IMPACT / RISK. Agreed with Nofil: save error handling will be its own change
-            after this one is tested.
-            Independent static review 3 (2026-11-15, subagent, before pasting): SAFE WITH
-            NOTES, no blockers. It built the app with both AFTER blocks pasted in. AFTER is the
-            same as BEFORE except for the 2 intended edits, the brackets and comments balance,
-            nothing still uses what was removed, no new Dataverse call or delegation risk, and
-            it predicts no new App Checker item. Every save path was walked through. Its 3
-            missing tests were added (T17-T19).
+            First version (2026-11-15): every Save closed the tab and went to the home list.
+            Static reviews 1-3: review 1 PASS WITH NOTES, review 2 (Nofil's reviewer) asked for
+            error handling, which was not added (see IMPACT / RISK), review 3 SAFE WITH NOTES.
+            Nofil pasted it in dev and saw the home list after Save.
+            2026-11-15 CORRECTION (Nofil, before testing): stay on the SAME query after Save,
+            out of edit mode (view mode), so a user who assigns a query to themselves can click
+            Edit Form straight away, and can see right away that their comment went through.
+            The AFTER of CHANGE 2 is replaced. CHANGE 1 is unchanged.
+            Review of the correction, version A: copying the edited values into the open query,
+            as the old "stay open" code did. DO NOT PASTE: the Zendesk ticket and Salesforce
+            case boxes update a field that doesn't exist (TicketCaseNumber), so the open query
+            showed the old numbers, and a second save wrote them back. Replaced by version B:
+            read the query again from Dataverse, exactly as opening it does. Review of B: SAFE
+            WITH NOTES. Its one useful note was added (if the query can't be read back, go to
+            the home list instead). Review of that addition: SAFE TO PASTE.
             Not a runtime test.
 
 WHY
 - Reported (Nofil, 2026-11-15): "Edit whole group" + comment + Save goes back to the home
-  list, but Edit Form on ONE part of a group + comment + Save keeps you on the query in edit
-  mode. Every successful Save should leave edit mode.
-- Cause: at the end of HiddenSaveButton.OnSelect the tab is closed UNLESS the flag
-  showAutoAssignConfirmModal is on (and the query is yours, and Status isn't Closed).
-  btnSaveClose.OnSelect turns that flag on for one part of a group that is yours,
-  "// to stay on the same screen". The block is in every export we have, back to the oldest
-  (last saved 2026-11-04, prod v1.51), so it is the main developer's design, not ours.
-- The same flag is set by "Assign to yourself" (or by picking yourself in Assigned To), and
-  it is also what shows the "Assignment Confirmation" pop-up. So "Assign and Save" also kept
-  the tab open in edit (single query, one part, whole group, and a New Request where you
-  picked yourself). Nofil chose (2026-11-15) that this should close too.
-- Staying open was also risky: the save had already released the edit lock (someone else
-  could open Edit Form on the same part), and the comment box isn't cleared, so a second
-  Save would post the same comment again.
+  list, but Edit Form on ONE part of a group + comment + Save keeps you on the query, still in
+  edit mode.
+- Cause: at the end of HiddenSaveButton.OnSelect the tab was closed UNLESS the flag
+  showAutoAssignConfirmModal was on (and the query was yours, and Status wasn't Closed).
+  btnSaveClose.OnSelect turned that flag on for one part of a group that is yours,
+  "// to stay on the same screen". This was in every export back to the oldest (last saved
+  2026-11-04, prod v1.51), so it is the main developer's design. The same flag is set by
+  "Assign to yourself", so "Assign and Save" also stayed in edit mode.
+- Staying in edit was risky: the save had already released the edit lock (someone else could
+  open Edit Form on the same part), and the comment box wasn't cleared, so a second Save
+  posted the same comment again.
+- Wanted (Nofil): after EVERY successful Save, leave edit mode but stay on the same query
+  (view mode). New Request still goes to the home list (there is no query tab to show yet).
 
 IMPACT / RISK
 - Only what happens AFTER a successful save changes. Validation, the "please add a comment"
   rules, all database writes, comments, Misses Tracker, files and the refresh are unchanged.
-- One part of a group (yours): Save -> saved -> home list (was: stayed in edit).
-- "Assign to yourself" -> "Assign and Save" (single, one part, whole group, New Request where
-  you picked yourself): saved -> home list (was: stayed in edit). To keep working on it,
-  open it again and click Edit Form.
-- Single query, whole group, normal New Request, Status Closed, reassigned to someone else:
-  already closed, still close.
+- Existing query (single, one part of a group, whole group, "Assign and Save", Status Closed,
+  reassigned to another person or department): the tab stays open in VIEW mode. The query is
+  read again from Dataverse (2 extra reads: PNQ_Backlogs and Query_Details, by Doc No).
+  - Before: single query, whole group, Closed and reassigned closed the tab. One part and
+    Assign and Save stayed in EDIT mode.
+  - Edit Form is visible again (not for Closed). Clicking it locks and edits as usual. After
+    "Assign and Save" you are the owner, so Edit Form lets you edit straight away.
+  - "Edit whole group": you come back to view mode on the part you opened it from. The group
+    bar, the "Edit whole group" button and the grey covers are hidden (they need edit mode).
+  - Pop-ups ("Assignment Confirmation", "Close iQuery", timeout) are closed. The edit timer
+    stops. The comment box is emptied (Reset), so the next edit starts empty.
+  - The SLA panel (Timer1) is worked out again for this query, as when a tab is opened.
+- New Request (1 or more parts, also when you picked yourself in Assigned To): the tab
+  closes and you go to the home list. Before, "pick yourself" + "Assign and Save" kept the
+  New Request tab open, and a second Save could try to create the same Doc No again.
+- If the query can't be read back after the save (rare): the tab closes and you go to the
+  home list, as in the first version, so the tab can never look like a New Request.
 - On one part of a group, the "Assignment Confirmation" pop-up no longer appears during the
-  save (CHANGE 1). That flag was on while the files uploaded, so the pop-up and its
-  "Assign and Save" button were most likely visible on a part that is already yours.
-- Form1.DefaultMode: unchanged. A query that is yours is in Edit. For "Assign and Save" the
-  flag is still on during SubmitForm (set by "Assign to yourself"), as before, so files
-  still save.
-- Form1.OnFailure (record 03 CHANGE 4): not changed. On one part the flag is now already
-  off, so its Patch does nothing there. Its code comment ("Save itself opened the pop-up")
-  is now out of date (cosmetic only, left alone).
-- The record 04 condition 'Text(cmbStatus.Selected.Value) = "Closed"' goes away with the If.
-  A Closed save closes the tab like every other save now.
-- Existing, not changed: on "Assign and Save" for a query that isn't yours, btnSaveClose
-  doesn't show validation errors and saves anyway (for example a field changed without a
-  reason). The only difference now is that the tab closes afterwards.
-- Existing, not changed (record 04 known limit 2): no error handling on the database writes.
-  If a write fails, Power Apps shows its red error banner, but "Record saved successfully"
-  still shows. Single query, whole group and New Request already closed the tab after a
-  failed write. Now one part and "Assign and Save" do too. Before, staying open there didn't
-  help either: the app had already treated the save as done (values copied, changed-fields
-  list emptied, lock released). Error handling is planned as its own change.
-- No new data calls -> no new delegation warnings. Callers checked: Save (btnSaveClose),
-  "Assign and Save" (AutoAssign_Save_Button) and "Save & Close Request" (Close_Button_4) all
-  go through btnSaveClose. Form1.OnSuccess is the only Select(HiddenSaveButton).
-  UploadAttachmentBtn's SubmitForm doesn't run HiddenSaveButton (uploadButtonClicked).
+  save (CHANGE 1). While the files uploaded it was on screen, and its "Assign and Save" could
+  start a second save.
+- Form1: switches to View after the save and shows the files read again. Form1.OnFailure
+  (record 03 CHANGE 4) isn't changed. On one part its Patch does nothing now. Its code comment
+  ("Save itself opened the pop-up") is out of date (cosmetic, left alone).
+- Delegation: the 2 new reads use a global variable (varSavedDocNo), the same pattern as
+  opening a query (Gallery6). No With-record field is used inside a Dataverse filter. No new
+  App Checker item is expected.
+- Existing, not changed:
+  - On "Assign and Save" for a query that isn't yours, btnSaveClose doesn't show validation
+    errors and saves anyway.
+  - The Zendesk / Salesforce boxes write a wrong field name while you type (TicketCaseNumber).
+    The save itself writes the right values, and the read-back now shows them. But changing
+    ONLY one of those numbers, with no comment, still gives "No changes made". Not a regression.
+  - No error handling on the database writes (record 04 known limit 2). Planned as its own
+    change after this one is tested.
+  - During a file upload the screen can be clicked. Don't switch tabs until "saved
+    successfully" shows (true for all saves).
+  - An open tab is never refreshed if someone else changes the query later (true for any
+    open tab today).
 
 THE CHANGE (2 changes, both on screen PartsQuerySystem, do them in order, same session)
+CHANGE 1 is the same as in the first version. If you already pasted it, you can skip it.
+CHANGE 2 is NEW: paste it even if you pasted the first version.
 
 ==================== CHANGE 1 ====================
 STEP 1: Screen: PartsQuerySystem
@@ -572,9 +583,11 @@ STEP 1: Screen: PartsQuerySystem
 STEP 2: Tree view: PartsQuerySystem > New Query Form Container > HiddenSaveButton
         (it is hidden: click it in the Tree view, you don't need to see it on the screen)
 STEP 3: Property dropdown: OnSelect
-STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
-What this changes: after the save, the tab is always closed and you go back to the home list
-(the "keep the tab open" part of the last If is removed). Nothing else changes.
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below (it replaces the whole
+        formula, including the first version if you pasted it).
+What this changes: after the save, a New Request closes and goes to the home list. Any other
+query stays open in view mode, read again from Dataverse (the part at the end, after the
+Refresh lines). The old "close the tab OR keep it in edit" If is removed.
 ---------------------------- BEFORE - CHANGE 2 ----------------------------
 Set(showLoader, true);
 Set(
@@ -2208,13 +2221,18 @@ Set(varActiveTabType, Last(colOpenTabs).TabType);
 Set(varActiveDocNo,   Last(colOpenTabs).DocNo);
 );*/
 
-// Close tab and return to list after EVERY save (change of 2026-11-15): also one part of a
-// group and "Assign and Save", which used to keep the tab open in edit mode.
-Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
-Set(varActiveTabID,   "tab_home");
-Set(varActiveTabType, "list");
-Set(varActiveDocNo,   "");
-Set(varFormError,     "");
+// After the save (change of 2026-11-15):
+// - New Request: close the tab and go back to the home list (as before).
+// - Existing query (single query, one part of a group, whole group, "Assign and Save", Closed):
+//   stay on the same query, out of edit mode (view mode). See the end of the Refresh lines below.
+If(
+    IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
+    Set(varActiveTabID,   "tab_home");
+    Set(varActiveTabType, "list");
+    Set(varActiveDocNo,   "");
+    Set(varFormError,     "")
+);
 Reset(pnqSubject);
 Reset(txtQueryDesc);
 Reset(txtTicketCaseNumber);
@@ -2222,6 +2240,65 @@ Reset(txtCaseNumber);
 Refresh(PNQ_Backlogs);
 Refresh(Query_Details);
 Refresh(PNQ_Comments);
+// Existing query: stay on the same tab in VIEW mode, with the query read again from Dataverse
+// (same as opening the tab), so the user sees exactly what was saved. Edit Form edits it again.
+If(
+    !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
+    Set(varSavedDocNo, LookUp(colOpenTabs, TabID = varActiveTabID).DocNo);
+    With(
+        {
+            _savedBacklog: LookUp(PNQ_Backlogs, DocNo = varSavedDocNo),
+            _savedDetails: LookUp(Query_Details, DocNo = varSavedDocNo)
+        },
+        If(
+            IsBlank(_savedBacklog),
+            // The query could not be read again (rare): go back to the home list instead, so
+            // this tab can never be mistaken for a New Request on a later Save.
+            Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
+            Set(varActiveTabID,   "tab_home");
+            Set(varActiveTabType, "list");
+            Set(varActiveDocNo,   ""),
+            Patch(
+                colOpenTabs,
+                LookUp(
+                    colOpenTabs,
+                    TabID = varActiveTabID
+                ),
+                {
+                    queryDetails: _savedBacklog,
+                    tempQueryDetails: _savedBacklog,
+                    secondaryDetails: _savedDetails,
+                    tempSecondaryDetails: _savedDetails,
+                    isEditing: false,
+                    isBatchEditing: false,
+                    editSessionStartedAt: Blank(),
+                    editLockExpiresAt: Blank(),
+                    editSessionActive: false,
+                    showTimeoutPopup: false,
+                    editSecondsRemaining: 0,
+                    showNewCommentBox: false,
+                    showAutoAssignConfirmModal: false,
+                    showiQueryRequestCloseConfirmModal: false,
+                    fieldsUpdated: FirstN(
+                        Table(
+                            {
+                                FieldName: "",
+                                OldValue: "",
+                                NewValue: "",
+                                Reason: ""
+                            }
+                        ),
+                        0
+                    )
+                }
+            )
+        )
+    );
+    Reset(CommentsRichTextEditor);
+    // SLA hours are worked out again for this query (Timer1), as when a tab is opened
+    Set(varSLATabID, Blank());
+    Set(varFormError,     "")
+);
 With(
     {
         _AOG:
@@ -2373,6 +2450,10 @@ Reset(TextInputReasonForFail);
 Set(showLoader, false);
 ---------------------------- END OF AFTER ----------------------------------
 
+After both changes: App Checker (stethoscope icon) -> no new errors. Performance: no
+delegation warning on btnSaveClose.OnSelect or HiddenSaveButton.OnSelect. Save, Publish,
+then test in the PUBLISHED dev app (not Studio preview).
+
 HOW TO UNDO
 - Paste BEFORE - CHANGE 2 back into HiddenSaveButton > OnSelect.
 - Paste BEFORE - CHANGE 1 back into btnSaveClose > OnSelect.
@@ -2381,42 +2462,53 @@ HOW TO UNDO
 TESTING (in dev)
 NOT TESTED YET.
 Impact check done: both BEFORE blocks copied from the 154_4 zip by script. AFTER differs only
-where described (diff checked: CHANGE 1 one 26-line block removed, CHANGE 2 the last If
-replaced by its close statements). Every reader and writer of showAutoAssignConfirmModal, and
-every caller of btnSaveClose, HiddenSaveButton and SubmitForm(Form1), checked.
-After pasting: App Checker -> no new errors. Performance: no delegation warning on
-btnSaveClose.OnSelect or HiddenSaveButton.OnSelect. Save, Publish, then test in the PUBLISHED
-dev app (not Studio preview).
+where described (CHANGE 1: one 26-line block removed. CHANGE 2: the last If replaced by
+"New Request -> close" and, after the Refresh lines, "existing query -> read again, view
+mode"). Every reader and writer of showAutoAssignConfirmModal, every control that reads the
+open query's data, and every caller of btnSaveClose, HiddenSaveButton and SubmitForm(Form1)
+were checked.
+In every test below, "view mode" means: same query still open, Edit Form button visible (not
+for Closed), fields greyed out / read-only, no comment box.
 T1  One part of a group, yours: Edit Form on part B, add a comment, Save -> "Record saved
-    successfully. Doc No: <first part's Doc No>" -> back to the home list. Open B again: the
-    comment is in B's history once. No "Assignment Confirmation" pop-up during the save.
-T2  Same as T1 but also attach a file (record 03) -> home list. Open any part: the file is
-    there, once.
-T3  One part, Status Interim + reason + Save -> home list. Only B is Interim (record 04).
-T4  One part, Status Closed -> "Save & Close Request" -> home list, B is Closed (as before).
-T5  Single query (not a group), yours: comment + Save -> home list (as before).
-T6  Edit whole group: comment + Save -> home list. All open parts have the comment (as before).
-T7  Query NOT yours (single): Edit Form -> "Assign to yourself" -> "Assign and Save" ->
-    home list. Open it: Assigned To = you, "Reassigned" history entry. Click Edit Form: you
-    can edit it normally.
-T8  Same as T7 on one part of a group, and on "Edit whole group" -> home list each time.
+    successfully. Doc No: <first part's Doc No>" -> STILL ON B in view mode. Your comment is in
+    B's history, once. No "Assignment Confirmation" pop-up during the save.
+T2  Same as T1 but also attach a file (record 03) -> view mode on B. The file shows once.
+T3  One part, Status Interim + reason + Save -> view mode, Status shows Interim. Only B is
+    Interim (record 04).
+T4  One part, Status Closed -> "Save & Close Request" -> the pop-up closes, view mode on B,
+    Status Closed, Edit Form hidden.
+T5  Single query (not a group), yours: comment + Save -> view mode on the same query.
+T6  Edit whole group: comment + Save -> view mode on the part you opened it from. No group
+    bar, no grey covers. All open parts have the comment.
+T7  Query NOT yours (single): Edit Form -> "Assign to yourself" -> "Assign and Save" -> view
+    mode, Assigned To = you, "Reassigned" in the history. Click Edit Form: you can edit it
+    straight away (no "Assign to yourself" needed).
+T8  Same as T7 on one part of a group, and on "Edit whole group".
 T9  "Assign to yourself" -> "Close" on the pop-up -> nothing saved, still in edit (as before).
 T10 Save with nothing changed -> "No changes made..." error, stays in edit (as before).
 T11 Change Assigned Department to another department, no comment -> "Please add a comment
-    describing your changes." -> stays in edit (as before). Add a comment, Save -> home list.
+    describing your changes." -> stays in edit (as before). Add a comment, Save -> view mode,
+    the new department shows. Click Edit Form: the "Assign to yourself" button appears.
 T12 New Request (1 part and 3 parts) -> created, home list (as before).
-T13 Lock: after T1, a second user clicks Edit Form on B -> can edit.
-T14 Two tabs open (query X and part B): save B -> home list. X is still in the tab bar.
+T13 Right after T1, a second user clicks Edit Form on B -> can edit (no "being edited by").
+T14 Two tabs open (query X and part B): save B -> view mode on B. Switch to X: X unchanged.
 T15 New Request -> pick YOURSELF in Assigned To -> "Assignment Confirmation" pop-up ->
     "Assign and Save" -> home list. The query is created ONCE (search its Doc No).
-T16 After T1, open another existing query and click Edit Form: the comment box is empty.
+T16 After T1, click Edit Form again on B: the comment box is EMPTY (click "Add New Comment").
 T17 Failed file save on one part (a file over the size limit or a blocked file type) + comment
-    + Save -> red error, you stay in edit, and NO "Assignment Confirmation" pop-up appears.
-T18 Configuration Management user, one part of a group that is in CM: move it out of CM,
-    fill Pass/Fail (and the fail reason if Fail), comment, Save -> home list. Exactly one
-    new iQuery_MissesTrackers row for that Doc No. Next query: Pass/Fail fields are empty.
+    + Save -> red error, you stay in edit, NO "Assignment Confirmation" pop-up.
+T18 Configuration Management user, one part in CM: move it out of CM, fill Pass/Fail (and the
+    fail reason if Fail), comment, Save -> view mode. Exactly one new iQuery_MissesTrackers row
+    for that Doc No.
 T19 "Assign and Save" on a query that isn't yours, with a file that fails to upload -> red
     error, the "Assignment Confirmation" pop-up stays open (as before), nothing else saved.
-Known, not changed: during a file upload the screen can be clicked (the loader is turned off
-right after SubmitForm). Don't switch tabs until the "saved successfully" message shows. That
-was already true for single queries, whole groups and New Requests.
+T20 Change Zendesk ticket number AND Salesforce case number, add a comment, Save -> view mode
+    shows the NEW numbers. Switch to another tab and back: still new. Edit Form, add another
+    comment, Save -> still new (check the query in Dataverse too).
+T21 After any save: Edit Form -> Save with no change and no comment -> "No changes made..."
+    (if you see "Please provide a reason for every modified field", tell me).
+T22 Change Subject, Priority and Need Date + comment, Save -> view mode shows the 3 new values
+    (not blank). Priority changed -> the time badge colour / SLA panel follows the new
+    priority.
+T23 After a save, wait 3 minutes on the query: no timeout pop-up, the tab stays open.
+T24 Close the query tab with X after a save -> it closes without a "discard changes" question.
