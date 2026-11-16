@@ -37,6 +37,16 @@ Status:     PENDING TEST - not yet tested in dev.
             a save is the same as opening the query, no new risk. Sending those queries home
             after every save would only be inconsistent. An ERROR on Query_Details does send
             you home. Review of this correction: SAFE TO PASTE.
+            2026-11-16 STUDIO ERRORS (Nofil pasted that version): 7 errors on
+            HiddenSaveButton.OnSelect ("Patch has some invalid arguments", "Expecting a Record
+            value, but of a different schema", "Missing column SearchText / Query_Description").
+            Cause: colOpenTabs keeps a fixed record shape. queryDetails is a PNQ_DB_ListSource row
+            (PNQ_Backlogs + SearchText, App.OnStart) and secondaryDetails has Arrow1's extra
+            Query_Description. Collect (opening a query) accepts a raw Dataverse row, Patch does
+            not. Static review can't see this, only Studio can. FIX: the read-back values are
+            merged INTO the tab's own records (Patch(<tab>.queryDetails, saved row)), the main
+            developer's pattern (Patch(secondaryDetails, tempSecondaryDetails)). Only those 4
+            lines changed. Review: SAFE WITH NOTES (type check confirmed by Studio only).
             Not a runtime test.
 
 WHY
@@ -2276,10 +2286,20 @@ If(
                     TabID = varActiveTabID
                 ),
                 {
-                    queryDetails: _savedBacklog,
-                    tempQueryDetails: _savedBacklog,
-                    secondaryDetails: _savedDetails,
-                    tempSecondaryDetails: _savedDetails,
+                    // The saved values are merged INTO the tab's own records, so they keep the
+                    // shape colOpenTabs was created with (Patch needs the same columns).
+                    queryDetails: Patch(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails, _savedBacklog),
+                    tempQueryDetails: Patch(LookUp(colOpenTabs, TabID = varActiveTabID).tempQueryDetails, _savedBacklog),
+                    secondaryDetails: If(
+                        IsBlank(_savedDetails),
+                        LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails,
+                        Patch(LookUp(colOpenTabs, TabID = varActiveTabID).secondaryDetails, _savedDetails)
+                    ),
+                    tempSecondaryDetails: If(
+                        IsBlank(_savedDetails),
+                        LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails,
+                        Patch(LookUp(colOpenTabs, TabID = varActiveTabID).tempSecondaryDetails, _savedDetails)
+                    ),
                     isEditing: false,
                     isBatchEditing: false,
                     editSessionStartedAt: Blank(),
@@ -2472,7 +2492,8 @@ Reset(TextInputReasonForFail);
 Set(showLoader, false);
 ---------------------------- END OF AFTER ----------------------------------
 
-After both changes: App Checker (stethoscope icon) -> no new errors. Performance: no
+After both changes: App Checker (stethoscope icon) -> no new errors. If HiddenSaveButton
+still shows an error, DON'T publish: take a screenshot and send it. Performance: no
 delegation warning on btnSaveClose.OnSelect or HiddenSaveButton.OnSelect. Save, Publish,
 then test in the PUBLISHED dev app (not Studio preview).
 
@@ -2534,5 +2555,7 @@ T22 Change Subject, Priority and Need Date + comment, Save -> view mode shows th
     priority.
 T23 After a save, wait 3 minutes on the query: no timeout pop-up, the tab stays open.
 T24 Close the query tab with X after a save -> it closes without a "discard changes" question.
+T25 After any save, check that EVERY field of the query shows its value in view mode, also
+    the ones you didn't change (customer, aircraft, vendor, solution, dates...).
 Not testable without forcing a Dataverse read failure: the "could not be shown again" warning
 (fallback). It only runs when the query can't be read back right after the save.
