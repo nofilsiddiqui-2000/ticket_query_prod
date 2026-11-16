@@ -1,22 +1,26 @@
 # Archived versions of iQuery (prod line)
 
 Older Power Apps exports of iQuery, kept for history and rollback.
-The app we are working on is the single .zip in the repo root.
-Don't use the zips in this folder for new fixes unless Nofil asks.
+The app we are working on is the single app file in the repo root (.msapp since 16 Nov; before
+that, export package .zip files). Don't use the files in this folder for new fixes unless Nofil asks.
 
 Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 ## Current version (repo root)
 
-- `iQuery_Dev_154_5_20261116034138.zip` (app iQuery_Dev_154_5): last saved 2026-11-16 03:40 UTC.
-  Includes Change_History 01-05 (05 = final version: after Save stay on the same query in view
-  mode). Both record 05 AFTER blocks match it exactly. Published to the TEST environment on
-  2026-11-16 for user testing. Base for the next work.
+- `iQuery_16_Nov_v2.msapp` (v1.55): last saved 2026-11-16 17:43 UTC.
+  Includes Change_History 01-06. All 7 record 06 AFTER blocks match it exactly (checked by
+  script 2026-11-16); those 7 OnSelect formulas are the only difference from `iQuery_16_Nov.msapp`.
+  Published to the TEST environment and pushed to main on 2026-11-16. Base for the next work.
+  Note: a .msapp has no Microsoft.Flow folder. The flows are unchanged since
+  `iQuery_Dev_154_5_20261116034138.zip` - use that package for the flow definitions.
 
 ## Archived
 
 | File | App version | Last saved (UTC) | Notes |
 |---|---|---|---|
+| `iQuery_16_Nov.msapp` | v1.54.5 | 2026-11-16 16:13 | Records 01-05 (05 = corrected read-back, pasted and saved). Only HiddenSaveButton.OnSelect differs from `iQuery_Dev_154_5`. Base for Change_History 06. |
+| `iQuery_Dev_154_5_20261116034138.zip` | - | 2026-11-16 03:40 | Records 01-05 (05 first "stay on the query" version). Published to the TEST environment on 2026-11-16. Last export package: holds the flow definitions (Microsoft.Flow). |
 | `iQuery_15_November_20261116022020.zip` | - | 2026-11-15 05:41 | Exported 2026-11-16 02:20 UTC, but identical to `iQuery_Dev_154_4` file by file (record 05 was pasted but not saved before this export). |
 | `iQuery_Dev_154_4_20261115054503.zip` | - | 2026-11-15 05:41 | Records 01-04 (04 with both 2026-11-15 corrections). Published to the TEST environment on 2026-11-15. Base for Change_History 05. |
 | `iQuery_Dev_154_3_20261115052040.zip` | - | 2026-11-15 05:18 | Records 01-04 with record 04 correction 1 (Label41 still had the _tab.batchDocNo delegation bug) + temporary count_debug_label. |
