@@ -6,7 +6,9 @@ Made by:    Nofil (with Claude Code)
 Type:       Bug fix (saving) + user feedback (stay on the query after Save)
 Based on:   iQuery_Dev_154_4_20261115054503.zip (last saved 2026-11-15 05:41 UTC).
             Includes Change_History 01-04 (02, 03 and 04 are in the TEST environment).
-            Both BEFORE blocks below were copied from this zip by script. Record 04 CHANGE 3
+            Both BEFORE blocks below were copied from this zip by script.
+            iQuery_15_November_20261116022020.zip (uploaded 2026-11-16) is the same app, file
+            by file (last saved 05:41 UTC too), so both BEFORE blocks match it as well. Record 04 CHANGE 3
             also changed HiddenSaveButton.OnSelect: its AFTER is this record's BEFORE - CHANGE 2.
 Status:     PENDING TEST - not yet tested in dev.
             First version (2026-11-15): every Save closed the tab and went to the home list.
@@ -24,6 +26,17 @@ Status:     PENDING TEST - not yet tested in dev.
             read the query again from Dataverse, exactly as opening it does. Review of B: SAFE
             WITH NOTES. Its one useful note was added (if the query can't be read back, go to
             the home list instead). Review of that addition: SAFE TO PASTE.
+            Nofil's reviewer (2026-11-16) on that version: "CHANGES REQUIRED", 2 points.
+            (1) ACCEPTED: if reading the query back gives an ERROR (not blank), If(IsBlank(...))
+            runs neither branch, so the tab stays in edit mode after its lock was released.
+            Fixed with a flag (varReopenedOk): view mode only when the query was read back,
+            otherwise a warning and the home list. (2) NOT ADOPTED: "blank Query_Details
+            clears the details". A blank Query_Details row is exactly what the app puts in
+            the tab when that query is opened from the list (Gallery6 and the 4 other open
+            formulas), and the group save already skips parts without one. So view mode after
+            a save is the same as opening the query, no new risk. Sending those queries home
+            after every save would only be inconsistent. An ERROR on Query_Details does send
+            you home. Review of this correction: SAFE TO PASTE.
             Not a runtime test.
 
 WHY
@@ -60,8 +73,10 @@ IMPACT / RISK
 - New Request (1 or more parts, also when you picked yourself in Assigned To): the tab
   closes and you go to the home list. Before, "pick yourself" + "Assign and Save" kept the
   New Request tab open, and a second Save could try to create the same Doc No again.
-- If the query can't be read back after the save (rare): the tab closes and you go to the
-  home list, as in the first version, so the tab can never look like a New Request.
+- If the query can't be read back after the save (blank or error, rare): a warning "Saved.
+  This query could not be shown again: open it from the list." and the tab closes (home list),
+  so it never stays in edit mode without its lock and never looks like a New Request.
+  A query that has no Query_Details row still stays open (same as opening it from the list).
 - On one part of a group, the "Assignment Confirmation" pop-up no longer appears during the
   save (CHANGE 1). While the files uploaded it was on screen, and its "Assign and Save" could
   start a second save.
@@ -2245,19 +2260,15 @@ Refresh(PNQ_Comments);
 If(
     !IsBlank(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails),
     Set(varSavedDocNo, LookUp(colOpenTabs, TabID = varActiveTabID).DocNo);
+    Set(varReopenedOk, false);
     With(
         {
             _savedBacklog: LookUp(PNQ_Backlogs, DocNo = varSavedDocNo),
             _savedDetails: LookUp(Query_Details, DocNo = varSavedDocNo)
         },
+        // Blank details are OK (same as opening the query from the list); an error is not.
         If(
-            IsBlank(_savedBacklog),
-            // The query could not be read again (rare): go back to the home list instead, so
-            // this tab can never be mistaken for a New Request on a later Save.
-            Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
-            Set(varActiveTabID,   "tab_home");
-            Set(varActiveTabType, "list");
-            Set(varActiveDocNo,   ""),
+            !IsBlankOrError(_savedBacklog) && !IsError(_savedDetails),
             Patch(
                 colOpenTabs,
                 LookUp(
@@ -2291,8 +2302,19 @@ If(
                         0
                     )
                 }
-            )
+            );
+            Set(varReopenedOk, true)
         )
+    );
+    // The query could not be read again (rare): go back to the home list instead, so this tab
+    // never stays in edit mode without its lock and never looks like a New Request.
+    If(
+        !varReopenedOk,
+        Notify("Saved. This query could not be shown again: open it from the list.", NotificationType.Warning);
+        Remove(colOpenTabs, LookUp(colOpenTabs, TabID = varActiveTabID));
+        Set(varActiveTabID,   "tab_home");
+        Set(varActiveTabType, "list");
+        Set(varActiveDocNo,   "")
     );
     Reset(CommentsRichTextEditor);
     // SLA hours are worked out again for this query (Timer1), as when a tab is opened
@@ -2512,3 +2534,5 @@ T22 Change Subject, Priority and Need Date + comment, Save -> view mode shows th
     priority.
 T23 After a save, wait 3 minutes on the query: no timeout pop-up, the tab stays open.
 T24 Close the query tab with X after a save -> it closes without a "discard changes" question.
+Not testable without forcing a Dataverse read failure: the "could not be shown again" warning
+(fallback). It only runs when the query can't be read back right after the save.
