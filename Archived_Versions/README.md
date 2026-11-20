@@ -8,10 +8,12 @@ Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 ## Current version (repo root)
 
-- `iQuery_16_Nov_v2.msapp` (v1.55): last saved 2026-11-16 17:43 UTC.
-  Includes Change_History 01-06. All 7 record 06 AFTER blocks match it exactly (checked by
-  script 2026-11-16); those 7 OnSelect formulas are the only difference from `iQuery_16_Nov.msapp`.
-  Published to the TEST environment and pushed to main on 2026-11-16. Base for the next work.
+- `iQuery_Dev_20_Nov.msapp` (v1.55.3): last saved 2026-11-20 16:53 UTC. Base for the next work.
+  Same code as `iQuery_16_Nov_v2.msapp`: every Src/*.pa.yaml file is identical (checked by script
+  2026-11-20), so it includes Change_History 01-06. Only differences: the app description
+  (v1.55 -> v1.55.3), a new app Id, control unique IDs renumbered, data source metadata
+  refreshed and image resources stored in a different region (weu instead of neu), so it was
+  saved as a different app copy / environment.
   Note: a .msapp has no Microsoft.Flow folder. The flows are unchanged since
   `iQuery_Dev_154_5_20261116034138.zip` - use that package for the flow definitions.
 
@@ -19,6 +21,7 @@ Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 | File | App version | Last saved (UTC) | Notes |
 |---|---|---|---|
+| `iQuery_16_Nov_v2.msapp` | v1.55 | 2026-11-16 17:43 | Records 01-06. All 7 record 06 AFTER blocks match it exactly (checked by script 2026-11-16); those 7 OnSelect formulas are the only difference from `iQuery_16_Nov.msapp`. Published to the TEST environment on 2026-11-16. Same code as `iQuery_Dev_20_Nov.msapp`. |
 | `iQuery_16_Nov.msapp` | v1.54.5 | 2026-11-16 16:13 | Records 01-05 (05 = corrected read-back, pasted and saved). Only HiddenSaveButton.OnSelect differs from `iQuery_Dev_154_5`. Base for Change_History 06. |
 | `iQuery_Dev_154_5_20261116034138.zip` | - | 2026-11-16 03:40 | Records 01-05 (05 first "stay on the query" version). Published to the TEST environment on 2026-11-16. Last export package: holds the flow definitions (Microsoft.Flow). |
 | `iQuery_15_November_20261116022020.zip` | - | 2026-11-15 05:41 | Exported 2026-11-16 02:20 UTC, but identical to `iQuery_Dev_154_4` file by file (record 05 was pasted but not saved before this export). |
