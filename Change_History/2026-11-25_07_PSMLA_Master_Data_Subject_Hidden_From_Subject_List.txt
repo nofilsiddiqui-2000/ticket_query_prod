@@ -1,0 +1,93 @@
+CHANGE RECORD 07 - "PS-MLA Master Data" can no longer be picked as a Subject
+==============================================================================
+Record:     07
+Date:       2026-11-25
+Made by:    Nofil (with Claude Code)
+Type:       User feedback (Subject list)
+Based on:   iQuery_Dev_20_Nov.msapp (last saved 2026-11-20 16:53 UTC).
+            Includes Change_History 01-06 (02-06 still PENDING TEST).
+            BEFORE code copied from this export. No earlier record changed pnqSubject.Items.
+Status:     PENDING TEST - not yet tested in dev.
+            Independent static review (2026-11-25): SAFE WITH NOTES, no code change needed.
+            Second check before recording (2026-11-25): no bugs found.
+
+WHY
+- Request: when users create a new query, the Subject dropdown must no longer offer
+  "PS-MLA Master Data".
+- The subject list is the collection colSubjects (built in App.OnStart; the last entry is
+  {Key:"PS-MLA Master Data", Value:"PS-MLA Master Data"}). Only one control shows it: the
+  Subject box pnqSubject (Items: colSubjects). The same box is used for a NEW query and for
+  editing an EXISTING query.
+- We don't delete the entry in App.OnStart: existing queries already saved with
+  "PS-MLA Master Data" would open with an EMPTY Subject box (DefaultSelectedItems looks the
+  subject up in colSubjects), and Save would stop with "Please select Subject". App.OnStart is
+  also shared logic.
+- Fix: the Subject box hides "PS-MLA Master Data", except when the open query is already saved
+  with that subject. A New Request tab has a blank saved copy (queryDetails), so it is always
+  hidden there.
+
+IMPACT / RISK
+- One property of one control. App.OnStart, colSubjects, colOpenTabs, the save code
+  (btnSaveClose, HiddenSaveButton), data sources and flows are NOT changed.
+- New query (single or group): "PS-MLA Master Data" is not in the list.
+- Existing query with another subject: not in the list either (nobody can switch to it).
+- Existing query already saved with "PS-MLA Master Data": still shows it, saves normally, and
+  can be changed to another subject.
+- The "By Subject" filter on the home list reads subjects from the data, so old PS-MLA queries
+  can still be found.
+- The Assigned Department "PS - MLA Master data" (set by pnqSubject.OnChange) is not affected.
+- colSubjects is a local collection: no delegation warning.
+
+==================== CHANGE 1 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer >
+        Container 3 > pnqSubject
+STEP 3: Property dropdown: Items
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+What this changes: the Subject dropdown hides "PS-MLA Master Data" unless the open query is
+already saved with that subject.
+---------------------------- BEFORE - CHANGE 1 ----------------------------
+colSubjects
+---------------------------- AFTER - CHANGE 1 -----------------------------
+With(
+    {
+        _savedSubject: Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.Subject)
+    },
+    Filter(
+        colSubjects,
+        Key <> "PS-MLA Master Data" || Key = _savedSubject
+    )
+)
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+- Paste BEFORE - CHANGE 1 (colSubjects) back into pnqSubject > Items.
+
+TESTING (in dev)
+NOT TESTED YET.
+Impact check: colSubjects is used only by pnqSubject.Items and pnqSubject.DefaultSelectedItems
+(DefaultSelectedItems unchanged). pnqSubject is read by btnSaveClose (validation "Please select
+Subject") and the save code (writes Selected.Key); both unchanged. Every way a new-query tab is
+created (search modal arrow, "New Request" button, group/multi-part) starts with a blank
+queryDetails. Edit Form and the read-back after Save refresh queryDetails, so the list follows
+the latest saved subject (also when another user changed it). Admin_Screen and Feedback_Screen
+have no subject choice.
+Test cases:
+1. New Request: open the Subject dropdown. "PS-MLA Master Data" is NOT there; typing "PS-MLA"
+   finds nothing. All other subjects are there.
+2. New Request: pick another subject, check Assigned Department fills in as before, save.
+3. New Request with more than 1 part (group): same as tests 1 and 2.
+4. Open an existing query saved with "PS-MLA Master Data" (find one with "By Subject" on the
+   home list): the Subject box shows it. Edit Form, change something else, Save: no
+   "Please select Subject" error, subject unchanged.
+5. Same query: Edit Form, change the Subject to another one, Save. Edit Form again: the
+   dropdown no longer offers "PS-MLA Master Data".
+6. Existing query with another subject: Edit Form, open the dropdown: "PS-MLA Master Data" is
+   NOT there.
+7. Switch between a PS-MLA query tab and a New Request tab: each shows the right list.
+If there is no PS-MLA query in dev, tests 4-5 can't be done; note that.
+
+NOTES (not caused by this change, not fixed here)
+- pnqSubject.OnChange writes Selected.Value into tempQueryDetails.Subject, but
+  DefaultSelectedItems looks it up by Key, so for every subject except PS-MLA that lookup finds
+  nothing. Backlog item.
