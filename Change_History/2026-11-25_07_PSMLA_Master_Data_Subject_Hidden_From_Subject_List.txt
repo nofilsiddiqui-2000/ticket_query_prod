@@ -1,41 +1,57 @@
-CHANGE RECORD 07 - "PS-MLA Master Data" can no longer be picked as a Subject
+CHANGE RECORD 07 - "PS-MLA Master Data" can no longer be picked as a Subject on new queries
 ==============================================================================
 Record:     07
-Date:       2026-11-25
+Date:       2026-11-25 (corrected 2026-11-26)
 Made by:    Nofil (with Claude Code)
 Type:       User feedback (Subject list)
-Based on:   iQuery_Dev_20_Nov.msapp (last saved 2026-11-20 16:53 UTC).
+Based on:   iQuery_Dev_20_Nov.msapp (last saved 2026-11-20 16:53 UTC) for the BEFORE code.
+            Checked again in iQuery_26_Nov_20261126154018.zip (last saved 2026-11-25 18:15 UTC),
+            which has version 1 of this record (see Status), including the files the app runs
+            (Controls/*.json).
             Includes Change_History 01-06 (02-06 still PENDING TEST).
-            BEFORE code copied from this export. No earlier record changed pnqSubject.Items.
-Status:     PENDING TEST - not yet tested in dev.
-            Independent static review (2026-11-25): SAFE WITH NOTES, no code change needed.
-            Second check before recording (2026-11-25): no bugs found.
+Status:     PENDING TEST - not fully tested in dev yet.
+            Version 1 (2026-11-25): Items = With(...) + Filter. Pasted in dev: NO EFFECT, PS-MLA
+            still listed (with and without typing), also in the published dev app.
+            Version 2 (2026-11-26): Items = If(saved subject is PS-MLA, colSubjects, Filter(...)).
+            Pasted, published, refreshed: NO EFFECT either.
+            Root cause of both (found 2026-11-26, see WHY): the box lists its items from a hidden
+            property, SearchItems, which still held the full list.
+            Version 3 (2026-11-26, the AFTER below): one plain Filter in Items, plus making Studio
+            rebuild SearchItems. Nofil pasted it in dev on 2026-11-26: PS-MLA is GONE from the
+            Subject dropdown on a New Request. Other test cases not reported yet.
 
 WHY
 - Request: when users create a new query, the Subject dropdown must no longer offer
-  "PS-MLA Master Data".
-- The subject list is the collection colSubjects (built in App.OnStart; the last entry is
-  {Key:"PS-MLA Master Data", Value:"PS-MLA Master Data"}). Only one control shows it: the
-  Subject box pnqSubject (Items: colSubjects). The same box is used for a NEW query and for
-  editing an EXISTING query.
-- We don't delete the entry in App.OnStart: existing queries already saved with
-  "PS-MLA Master Data" would open with an EMPTY Subject box (DefaultSelectedItems looks the
-  subject up in colSubjects), and Save would stop with "Please select Subject". App.OnStart is
-  also shared logic.
-- Fix: the Subject box hides "PS-MLA Master Data", except when the open query is already saved
-  with that subject. A New Request tab has a blank saved copy (queryDetails), so it is always
-  hidden there.
+  "PS-MLA Master Data". Old queries already saved with that subject must keep working.
+- The subject list is the collection colSubjects (App.OnStart; last entry
+  {Key:"PS-MLA Master Data", Value:"PS-MLA Master Data"}). It is shown by one control, the Subject
+  box pnqSubject, used for NEW and for EXISTING queries.
+- We don't delete the entry in App.OnStart: old PS-MLA queries would open with an EMPTY Subject
+  box (DefaultSelectedItems looks the subject up in colSubjects), and Save would stop with
+  "Please select Subject", forcing users to change the subject of old queries.
+- Why versions 1 and 2 did nothing (CONFIRMED from Controls/*.json): pnqSubject is a Classic
+  ComboBox with "Allow searching" on (IsSearchable = true). Such a box fills its dropdown from a
+  HIDDEN property, SearchItems, not from Items. SearchItems is not in the property dropdown and
+  not in the Src/*.pa.yaml files; it is only in Controls/*.json. It was still
+      Search(colSubjects, pnqSubject.SearchText, Value)
+  (made by Studio when Items was plain colSubjects), so the dropdown always showed the full list.
+  Studio did not rebuild it for the With(...) and If(...) formulas.
+- Not the cause: DefaultSelectedItems (only picks the selected item; blank on a new query) and
+  the "11.0" line in OnChange (only sets the Assigned Department, for a subject that is not in
+  the list).
+- Fix: Items = one plain Filter (no With / If) that hides PS-MLA unless the open query is already
+  saved with it, and Studio rebuilds SearchItems from it.
 
 IMPACT / RISK
-- One property of one control. App.OnStart, colSubjects, colOpenTabs, the save code
-  (btnSaveClose, HiddenSaveButton), data sources and flows are NOT changed.
-- New query (single or group): "PS-MLA Master Data" is not in the list.
-- Existing query with another subject: not in the list either (nobody can switch to it).
-- Existing query already saved with "PS-MLA Master Data": still shows it, saves normally, and
-  can be changed to another subject.
-- The "By Subject" filter on the home list reads subjects from the data, so old PS-MLA queries
-  can still be found.
-- The Assigned Department "PS - MLA Master data" (set by pnqSubject.OnChange) is not affected.
+- Only pnqSubject (Items, and the hidden SearchItems rebuilt by Studio). App.OnStart, colSubjects,
+  colOpenTabs, the save code (btnSaveClose, HiddenSaveButton), data sources and flows are NOT
+  changed.
+- New query (single or group, New Request button or search box arrow): PS-MLA is not offered.
+- Existing query with another subject: PS-MLA is not offered (nobody can switch to it).
+- Existing query already saved with PS-MLA: still shows it, saves normally, can be changed to
+  another subject (and back, until it is saved).
+- Home list "By Subject" filter reads subjects from the data, so old PS-MLA queries can still be
+  found. The Assigned Department "PS - MLA Master data" is not affected.
 - colSubjects is a local collection: no delegation warning.
 
 ==================== CHANGE 1 ====================
@@ -44,50 +60,90 @@ STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainCon
         Container 3 > pnqSubject
 STEP 3: Property dropdown: Items
 STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
-What this changes: the Subject dropdown hides "PS-MLA Master Data" unless the open query is
-already saved with that subject.
+What this changes: the Subject list hides "PS-MLA Master Data" unless the open query is already
+saved with that subject.
 ---------------------------- BEFORE - CHANGE 1 ----------------------------
 colSubjects
 ---------------------------- AFTER - CHANGE 1 -----------------------------
-With(
-    {
-        _savedSubject: Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.Subject)
-    },
-    Filter(
-        colSubjects,
-        Key <> "PS-MLA Master Data" || Key = _savedSubject
-    )
+Filter(
+    colSubjects,
+    Key <> "PS-MLA Master Data" ||
+    Key = Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.Subject)
 )
 ---------------------------- END OF AFTER ----------------------------------
 
+==================== CHANGE 2 ====================
+STEP 1: Same control: pnqSubject (selected in the Tree view).
+STEP 2: Properties panel (right side): turn "Allow searching" OFF, then ON again.
+STEP 3: Properties panel > Fields > Edit: Primary text = Value, Search field = Value.
+What this changes: makes Studio rebuild the hidden SearchItems property from the new Items, so the
+dropdown (and typing in it) uses the filtered list.
+---------------------------- BEFORE - CHANGE 2 (hidden SearchItems) -------
+Search(colSubjects,pnqSubject.SearchText,Value)
+---------------------------- AFTER - CHANGE 2 (expected, made by Studio) --
+Search(<the Items formula above>, pnqSubject.SearchText, Value)
+(not typed by hand; check it in Controls/*.json of the next export)
+---------------------------- END OF AFTER ----------------------------------
+Fallback if PS-MLA still shows: leave "Allow searching" OFF. The box then lists Items directly;
+users can no longer type to search subjects (they scroll the list).
+
 HOW TO UNDO
-- Paste BEFORE - CHANGE 1 (colSubjects) back into pnqSubject > Items.
+- Paste BEFORE - CHANGE 1 (colSubjects) back into pnqSubject > Items, then do CHANGE 2 again
+  (Allow searching off/on, Fields = Value) so SearchItems follows.
 
 TESTING (in dev)
-NOT TESTED YET.
-Impact check: colSubjects is used only by pnqSubject.Items and pnqSubject.DefaultSelectedItems
-(DefaultSelectedItems unchanged). pnqSubject is read by btnSaveClose (validation "Please select
-Subject") and the save code (writes Selected.Key); both unchanged. Every way a new-query tab is
-created (search modal arrow, "New Request" button, group/multi-part) starts with a blank
-queryDetails. Edit Form and the read-back after Save refresh queryDetails, so the list follows
-the latest saved subject (also when another user changed it). Admin_Screen and Feedback_Screen
-have no subject choice.
+2026-11-26, Nofil: version 3 pasted; PS-MLA no longer in the Subject dropdown on a New Request.
+Other cases NOT TESTED YET.
 Test cases:
-1. New Request: open the Subject dropdown. "PS-MLA Master Data" is NOT there; typing "PS-MLA"
-   finds nothing. All other subjects are there.
-2. New Request: pick another subject, check Assigned Department fills in as before, save.
-3. New Request with more than 1 part (group): same as tests 1 and 2.
-4. Open an existing query saved with "PS-MLA Master Data" (find one with "By Subject" on the
-   home list): the Subject box shows it. Edit Form, change something else, Save: no
-   "Please select Subject" error, subject unchanged.
-5. Same query: Edit Form, change the Subject to another one, Save. Edit Form again: the
-   dropdown no longer offers "PS-MLA Master Data".
-6. Existing query with another subject: Edit Form, open the dropdown: "PS-MLA Master Data" is
-   NOT there.
+1. New Request: open Subject without typing; scroll to the bottom: no PS-MLA. Type "PS": no PS-MLA.
+   All other subjects are there.
+2. New Request: pick another subject, Assigned Department fills in as before, save.
+3. New Request with more than 1 part (group), and a new query started from the search box arrow:
+   same as tests 1 and 2.
+4. Existing query saved with PS-MLA (find one with "By Subject" on the home list): Subject shows
+   PS-MLA. Edit Form, change something else, Save: no "Please select Subject" error, subject
+   unchanged.
+5. Same query: Edit Form, change Subject to another one, Save. Edit Form again: PS-MLA no longer
+   offered.
+6. Existing query with another subject: Edit Form, open Subject: PS-MLA not offered.
 7. Switch between a PS-MLA query tab and a New Request tab: each shows the right list.
-If there is no PS-MLA query in dev, tests 4-5 can't be done; note that.
+8. Export the app after saving: Controls/*.json pnqSubject SearchItems must wrap the new Filter.
+
+REVIEW (independent whole-app review of version 3, 2026-11-26): SAFE WITH NOTES
+Checked from Controls/*.json (all pnqSubject properties) and the whole app.
+- Items v3 reads only queryDetails.Subject (the saved copy), never tempQueryDetails, so picking in
+  the dropdown can't change the list. New Request (button; Arrow1 is hidden), multi-part creation,
+  one part of a group, whole group, Assign and Save, Closed, tab switching: all use the active
+  tab's queryDetails. Saved PS-MLA query keeps PS-MLA until a change away from it is saved.
+- DefaultSelectedItems: PS-MLA is the only subject whose Key = Value, so its lookup always finds
+  it; old PS-MLA queries show their subject.
+- Every save writes pnqSubject.Selected.Key (new query, history, multi-part, whole group, single
+  update); btnSaveClose validation, Reset after save and read-back unchanged.
+- Not affected: home "By Subject" filter (Distinct of data), galleries (ThisItem.Subject), flow
+  Export-iQuery-ReportData (raw cr7ba_requestsubject), Admin_Screen, Feedback_Screen.
+- Two users: Edit Form re-reads the query (record 06), so the list follows the latest subject.
+  If A was already editing when B saved, last save wins (same as before).
+- No delegation, speed or formula issues (local collections, ~59 rows).
+- Depends on SearchItems having been rebuilt (CHANGE 2). Next export: in Controls/*.json,
+  pnqSubject SearchItems must contain Key <> "PS-MLA Master Data", IsSearchable = true,
+  DisplayFields = SearchFields = ["Value"], Items = v3.
+Pre-existing (not caused by this change, backlog):
+- OnChange stores Selected.Value in tempQueryDetails.Subject; DefaultSelectedItems looks up Key.
+  For subjects other than PS-MLA, leaving the tab with an unsaved subject change and coming back
+  can show a blank Subject ("Please select Subject" on Save). Fix later: Subject: Self.Selected.Key.
+- OnChange maps "11.0" to department "PS-MLA Master Data", but no subject has Key "11.0", so
+  picking PS-MLA sets the department to blank. Changing X -> back to the saved subject doesn't
+  reset the department (any subject), so a PS-MLA query changed to X and back may keep X's
+  department. Check the department in test 9 below.
+Extra test cases from the review:
+9.  Saved PS-MLA query: change to X, back to PS-MLA, Save: check subject, history and Assigned
+    Department.
+10. Whole-group edit on a PS-MLA group, and one part of a group: save, check every part's subject.
+11. PS-MLA tab in edit mode -> switch to a New Request tab: Subject blank, PS-MLA not listed.
+    Switch back: still PS-MLA.
+12. Two users: A opens a PS-MLA query; B changes its subject to X and saves; A clicks Edit Form:
+    X shown, PS-MLA not offered.
 
 NOTES (not caused by this change, not fixed here)
-- pnqSubject.OnChange writes Selected.Value into tempQueryDetails.Subject, but
-  DefaultSelectedItems looks it up by Key, so for every subject except PS-MLA that lookup finds
-  nothing. Backlog item.
+- pnqSubject.OnChange writes Selected.Value into tempQueryDetails.Subject, but DefaultSelectedItems
+  looks it up by Key, so for every subject except PS-MLA that lookup finds nothing. Backlog item.
