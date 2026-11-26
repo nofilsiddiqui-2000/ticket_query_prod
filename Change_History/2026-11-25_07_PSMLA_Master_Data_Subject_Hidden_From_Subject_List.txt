@@ -18,7 +18,13 @@ Status:     PENDING TEST - not fully tested in dev yet.
             property, SearchItems, which still held the full list.
             Version 3 (2026-11-26, the AFTER below): one plain Filter in Items, plus making Studio
             rebuild SearchItems. Nofil pasted it in dev on 2026-11-26: PS-MLA is GONE from the
-            Subject dropdown on a New Request. Other test cases not reported yet.
+            Subject dropdown on a New Request. BUT the list then showed the numbered names
+            ("1.0 New Part Set-Up"): toggling Allow searching / the Fields panel had reset
+            DisplayFields and SearchFields to Key. CHANGE 2 now sets both back to ["Value"].
+            NOT READY TO PUBLISH until: CHANGE 2 steps 3-5 are done, the tests below pass, and
+            the next export passes the whole-app comparison (TESTING, test 13).
+            Record reviewed independently 2026-11-26 against the app: READY WITH NOTES; all
+            notes applied (search-by-name check, exact undo, fallback needs approval).
 
 WHY
 - Request: when users create a new query, the Subject dropdown must no longer offer
@@ -43,10 +49,12 @@ WHY
   saved with it, and Studio rebuilds SearchItems from it.
 
 IMPACT / RISK
-- Only pnqSubject (Items, and the hidden SearchItems rebuilt by Studio). App.OnStart, colSubjects,
+- Only pnqSubject: Items, and the hidden SearchItems rebuilt by Studio. DisplayFields and
+  SearchFields must stay ["Value"] (as before), so the list keeps showing names without numbers.
+  App.OnStart, colSubjects,
   colOpenTabs, the save code (btnSaveClose, HiddenSaveButton), data sources and flows are NOT
   changed.
-- New query (single or group, New Request button or search box arrow): PS-MLA is not offered.
+- New query (single or multi-part, New Request button): PS-MLA is not offered.
 - Existing query with another subject: PS-MLA is not offered (nobody can switch to it).
 - Existing query already saved with PS-MLA: still shows it, saves normally, can be changed to
   another subject (and back, until it is saved).
@@ -75,8 +83,17 @@ Filter(
 ==================== CHANGE 2 ====================
 STEP 1: Same control: pnqSubject (selected in the Tree view).
 STEP 2: Properties panel (right side): turn "Allow searching" OFF, then ON again.
-STEP 3: Property dropdown: DisplayFields. Ctrl+A, paste:  ["Value"]
-STEP 4: Property dropdown: SearchFields. Ctrl+A, paste:   ["Value"]
+STEP 3: Property dropdown (top left, next to fx): DisplayFields. Click in the formula bar,
+        Ctrl+A, paste:  ["Value"]
+STEP 4: Property dropdown (top left, next to fx): SearchFields. Click in the formula bar,
+        Ctrl+A, paste:  ["Value"]
+STEP 5: Press F5, click New Request, open Subject and type  1.0
+        Correct: NO subject is listed (search is by name, as before).
+        If "New Part Set-Up" (or any subject) appears, the search is using the numbered name:
+        repeat STEP 2, then check STEPS 3-4 still show ["Value"], and test again.
+After STEP 5: do NOT touch "Allow searching", the Fields "Edit" panel or Items again.
+Before publishing, also check in the property dropdown: SelectMultiple = false,
+InputTextPlaceholder = "Select subject", DefaultSelectedItems unchanged (test 13 checks them all).
 What this changes: makes Studio rebuild the hidden SearchItems property from the new Items, so the
 dropdown (and typing in it) uses the filtered list. STEPS 3-4 put the box's display back to what
 it was: changing Items / Allow searching makes Studio reset DisplayFields and SearchFields to the
@@ -94,33 +111,62 @@ Search(<the Items formula above>, pnqSubject.SearchText, Value)
 (not typed by hand; check it in Controls/*.json of the next export)
 ---------------------------- END OF AFTER ----------------------------------
 Fallback if PS-MLA still shows: leave "Allow searching" OFF. The box then lists Items directly;
-users can no longer type to search subjects (they scroll the list).
+users can no longer type to search subjects (they scroll the list). This changes how users use the
+box: do NOT publish it without approval; report back instead.
 
 HOW TO UNDO
-- Paste BEFORE - CHANGE 1 (colSubjects) back into pnqSubject > Items, then do CHANGE 2 again
-  (Allow searching off/on, Fields = Value) so SearchItems follows.
+- Easiest exact undo: make.powerapps.com > the dev app > Details > Versions > Restore the version
+  saved before this record.
+- Otherwise: paste BEFORE - CHANGE 1 (colSubjects) back into pnqSubject > Items, then do all of
+  CHANGE 2 again (Allow searching off/on, DisplayFields = ["Value"], SearchFields = ["Value"],
+  STEP 5 check). Then run test 2 (type 1.0: nothing listed) and test 13 against 20 Nov:
+  0 changes expected.
 
 TESTING (in dev)
-2026-11-26, Nofil: version 3 pasted; PS-MLA no longer in the Subject dropdown on a New Request.
-Other cases NOT TESTED YET.
-Test cases:
-1. New Request: open Subject without typing; scroll to the bottom: no PS-MLA. Type "PS": no PS-MLA.
-   All other subjects are there.
-2. New Request: pick another subject, Assigned Department fills in as before, save.
-3. New Request with more than 1 part (group), and a new query started from the search box arrow:
-   same as tests 1 and 2.
-4. Existing query saved with PS-MLA (find one with "By Subject" on the home list): Subject shows
-   PS-MLA. Edit Form, change something else, Save: no "Please select Subject" error, subject
-   unchanged.
-5. Same query: Edit Form, change Subject to another one, Save. Edit Form again: PS-MLA no longer
-   offered.
-6. Existing query with another subject: Edit Form, open Subject: PS-MLA not offered.
-7. Switch between a PS-MLA query tab and a New Request tab: each shows the right list.
-8. Export the app after saving: Controls/*.json pnqSubject SearchItems must wrap the new Filter,
-   and EVERY other pnqSubject property must be the same as in iQuery_26_Nov (compared by script;
-   only Items and SearchItems may differ).
-1b. The list shows the subject names WITHOUT numbers ("New Part Set-Up", not
-   "1.0 New Part Set-Up"), as before. A selected subject also shows without the number.
+2026-11-26, Nofil: version 3 pasted; PS-MLA no longer in the Subject dropdown on a New Request,
+but the names showed with numbers (fixed by CHANGE 2 steps 3-4, not yet re-tested).
+Everything else NOT TESTED YET.
+Test cases (all in dev; the published dev app after a refresh):
+New queries
+1.  New Request: open Subject without typing, scroll to the bottom: no PS-MLA. Type "PS" and
+    "MLA": no PS-MLA. The other 52 subjects are there.
+2.  The list shows names WITHOUT numbers ("New Part Set-Up", not "1.0 New Part Set-Up"), as
+    before. A selected subject also shows without the number. Typing "New Part" finds it.
+    Typing "1.0" lists NOTHING (search is by name, as before). If a subject appears: STOP, do
+    not publish (CHANGE 2 STEP 5).
+3.  New Request: pick a subject, Assigned Department fills in as before, save. Open the saved
+    query: subject shown correctly.
+4.  New Request with more than 1 part (group): same as tests 1-3; every part has the subject.
+Old queries
+5.  Existing query saved with PS-MLA (find one with "By Subject" on the home list): Subject shows
+    PS-MLA. Edit Form, change something else, Save: no "Please select Subject" error, subject
+    unchanged.
+6.  Same query: Edit Form, change Subject to another one, Save. Edit Form again: PS-MLA no longer
+    offered.
+7.  Saved PS-MLA query: change to X, back to PS-MLA, Save: check subject, history and Assigned
+    Department.
+8.  Existing query with another subject: Edit Form, open Subject: PS-MLA not offered; its own
+    subject shows without the number.
+9.  Whole-group edit on a PS-MLA group, and one part of a group: save, check every part's subject.
+Tabs and two users
+10. Switch between a PS-MLA query tab and a New Request tab: each shows the right list.
+11. PS-MLA tab in edit mode -> switch to a New Request tab: Subject blank, PS-MLA not listed.
+    Switch back: still PS-MLA.
+12. Two users: A opens a PS-MLA query; B changes its subject to X and saves; A clicks Edit Form:
+    X shown, PS-MLA not offered.
+Export check (before publishing)
+13. Export the app and upload it. Claude Code runs (script kept locally in _changes/):
+      python -I _changes/compare_export.py _extracted/iQuery_Dev_20_Nov/msapp _extracted/<new export>/msapp
+    It compares every formula of every control on all screens and App (Controls/*.json) with
+    iQuery_Dev_20_Nov (before this record). Data sources and app settings are not compared.
+    Pass = only pnqSubject.Items and pnqSubject.SearchItems changed, nothing else in the app;
+    Items = version 3 (if the script says False, compare the printed Items by eye: Studio may
+    reformat spacing); SearchItems contains Key <> "PS-MLA Master Data" AND ends with
+    SearchText,Value) (spaces ignored); DisplayFields = SearchFields = ["Value"]; IsSearchable = true.
+    (Dry run 2026-11-26 on 20 Nov vs 26 Nov: found exactly the 1 change made, Items v1.)
+Static checks done 2026-11-26 (no Power Apps needed): v3 run on the real 53-subject list:
+new query -> 52 subjects, no PS-MLA; saved PS-MLA query -> 53, PS-MLA shown; other saved
+query -> 52, no PS-MLA; no shown name starts with a number when DisplayFields = ["Value"].
 
 REVIEW (independent whole-app review of version 3, 2026-11-26): SAFE WITH NOTES
 Checked from Controls/*.json (all pnqSubject properties) and the whole app.
@@ -136,7 +182,7 @@ Checked from Controls/*.json (all pnqSubject properties) and the whole app.
   Export-iQuery-ReportData (raw cr7ba_requestsubject), Admin_Screen, Feedback_Screen.
 - Two users: Edit Form re-reads the query (record 06), so the list follows the latest subject.
   If A was already editing when B saved, last save wins (same as before).
-- No delegation, speed or formula issues (local collections, ~59 rows).
+- No delegation, speed or formula issues (local collections, 53 subjects).
 - Depends on SearchItems having been rebuilt (CHANGE 2). Next export: in Controls/*.json,
   pnqSubject SearchItems must contain Key <> "PS-MLA Master Data", IsSearchable = true,
   DisplayFields = SearchFields = ["Value"], Items = v3.
@@ -147,16 +193,8 @@ Pre-existing (not caused by this change, backlog):
 - OnChange maps "11.0" to department "PS-MLA Master Data", but no subject has Key "11.0", so
   picking PS-MLA sets the department to blank. Changing X -> back to the saved subject doesn't
   reset the department (any subject), so a PS-MLA query changed to X and back may keep X's
-  department. Check the department in test 9 below.
-Extra test cases from the review:
-9.  Saved PS-MLA query: change to X, back to PS-MLA, Save: check subject, history and Assigned
-    Department.
-10. Whole-group edit on a PS-MLA group, and one part of a group: save, check every part's subject.
-11. PS-MLA tab in edit mode -> switch to a New Request tab: Subject blank, PS-MLA not listed.
-    Switch back: still PS-MLA.
-12. Two users: A opens a PS-MLA query; B changes its subject to X and saves; A clicks Edit Form:
-    X shown, PS-MLA not offered.
+  department. Check the department in test 7.
+(The review's extra test cases are tests 7, 9, 11 and 12 above.)
 
 NOTES (not caused by this change, not fixed here)
-- pnqSubject.OnChange writes Selected.Value into tempQueryDetails.Subject, but DefaultSelectedItems
-  looks it up by Key, so for every subject except PS-MLA that lookup finds nothing. Backlog item.
+- See "Pre-existing" under REVIEW (2 backlog items).
