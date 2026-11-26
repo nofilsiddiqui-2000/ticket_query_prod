@@ -1,0 +1,1018 @@
+CHANGE RECORD 08 - New Subject "Material Logistic Master Data Alignment"
+==============================================================================
+Record:     08
+Date:       2026-11-26
+Made by:    Nofil (with Claude Code)
+Type:       User feedback (manager request: Subject list)
+Based on:   iQuery_26_Nov_20261126154018.zip (last saved 2026-11-25 18:15 UTC). App.OnStart and
+            pnqSubject.OnChange are identical to iQuery_Dev_20_Nov (before record 07). BEFORE code
+            below copied by script from Controls/*.json (the code the app runs).
+            Record 07 (hide PS-MLA from the Subject list) is applied in dev but still PENDING TEST.
+            This record does not depend on it and does not change anything record 07 changed.
+Status:     PENDING TEST - not yet tested in dev. Approved by Nofil 2026-11-26.
+            Independent review 2026-11-26: READY WITH NOTES (code correct and paste-ready);
+            all notes applied below.
+
+WHY
+- Manager request (2026-11-26): add a new Subject "Material Logistic Master Data Alignment", and
+  remove the line  "11.0", "PS-MLA Master Data",  from the "// Material Master" part of the
+  Subject box's OnChange.
+- Decisions (Nofil, 2026-11-26): it is a new Subject in the dropdown; Assigned Department: none
+  (left blank, the user picks one).
+- How subjects work (CONFIRMED in the code): the list is colSubjects in App.OnStart, one
+  {Key, Value} per subject. Users see Value (no number); the query saves Key (with number).
+  pnqSubject.OnChange has a Switch that maps each Key to the Assigned Department.
+- The line "11.0", "PS-MLA Master Data" never ran: no subject has the Key "11.0". So removing it
+  changes nothing by itself.
+- The new subject follows the same pattern:
+    Key   (saved)  = "11.0 Material Logistic Master Data Alignment"
+    Value (shown)  = "Material Logistic Master Data Alignment"
+  It goes into the list between "10.9 Excess & Inactive Inventory Request" and
+  "12.0 MAG Certification" (same order as the numbers), and its Switch line maps it to Blank()
+  (no department), in the place of the removed "11.0" line.
+- Exact text to confirm with the manager before pasting: "Logistic" (not "Logistics"), as given.
+  The saved Key is permanent in the data once queries are saved with it.
+
+IMPACT / RISK
+- Two properties: App.OnStart (ONE line added to the colSubjects list, nothing else) and
+  pnqSubject.OnChange (ONE line replaced). Nothing else changes: Items, SearchItems,
+  DisplayFields, SearchFields, DefaultSelectedItems, the save code, data sources and flows.
+- The new subject appears in the Subject dropdown for new and existing queries (record 07's Items
+  filter only hides "PS-MLA Master Data"). It shows without the number, like the others, and can
+  be found by typing (SearchItems searches colSubjects' Value, which now includes it).
+- Picking it works exactly like "12.0 MAG Certification" today: the Assigned Department box and the
+  Assigned To list are emptied, and Save asks "Please select an Assigned Department" until the
+  user picks one. On an existing query the department is cleared too; picking a different one
+  than before asks for a comment on Save (as today for any department change).
+- Saving writes Key "11.0 Material Logistic Master Data Alignment" to the Subject column
+  (text, max 4000 characters; longest existing Key is 71 characters). The home "By Subject" filter,
+  galleries and the Export-iQuery-ReportData flow read the saved text, so the new subject appears
+  there once a query is saved with it. No flow checks subject names (searched all 3 flows).
+- No other place in the app lists subject names or reads the number (searched the whole app: SLA
+  uses priority and department only; Misses tracker, Admin and Feedback screens don't use it).
+  Reports outside the app (Power BI, Dataverse views) were not checked.
+- After this record, record 07 test 1 expects 53 other subjects (not 52).
+- Users with the app already open before publishing keep the old list: they can't pick the new
+  subject, and a query saved with it shows an EMPTY Subject box for them (Save would ask for a
+  subject). After publishing, ask users to close and reopen iQuery (refresh the browser tab).
+- If App.OnStart is pasted wrongly the whole app can fail to start: copy the AFTER exactly and
+  test in Studio (Run OnStart) before publishing.
+
+==================== CHANGE 1 ====================
+STEP 1: Tree view (left panel): click App (at the very top of the tree).
+STEP 2: Property dropdown (top left, next to fx): OnStart
+STEP 3: Do NOT replace the whole OnStart. In the formula bar, find this line:
+            {Key:"10.9 Excess & Inactive Inventory Request", Value:"Excess & Inactive Inventory Request"},
+        Click at the very END of it (after the comma), press Enter, and paste this ONE line:
+            {Key:"11.0 Material Logistic Master Data Alignment", Value:"Material Logistic Master Data Alignment"},
+        The next line must still be {Key:"12.0 MAG Certification", ...}. The full AFTER below is
+        for reference and undo only (it is exactly the BEFORE plus this one line).
+STEP 4: Tree view: click the "..." next to App > Run OnStart. Check there is no red error.
+What this changes: adds the new subject to the Subject list.
+---------------------------- BEFORE - CHANGE 1 ----------------------------
+Set(showLoader, true);
+Set(toggle_container_value, "dashboard");
+Set(commentsView, "chat");
+ClearCollect(
+    colFilters,
+{});
+ClearCollect(
+    colDepartments,
+    { Department: "Configuration Management", DepartmentCode: "CM" },
+    // { Department: "Forecasting", DepartmentCode: "FC" },
+    { Department: "Material Logistics", DepartmentCode: "ML" },
+    { Department: "CSR", DepartmentCode: "CS" },
+    { Department: "CSR-YUL", DepartmentCode: "CS" },
+    { Department: "CSR - YUL", DepartmentCode: "CS" },
+    { Department: "CSR - ICT", DepartmentCode: "CS" },
+    { Department: "CRC - YUL", DepartmentCode: "CRY" },
+    { Department: "CRC-ICT", DepartmentCode: "CRI" },
+    { Department: "Pricing Operations", DepartmentCode: "PR" }
+    //{ Department: "Others", DepartmentCode: "DEF" }
+);
+Set(
+    varUser,
+    With(
+        {
+            currentUser: User(),
+            employeeRec: LookUp(
+                PNQ_Department_Employee_Tables,
+                Lower(Employee_Email) = Lower(User().Email)
+            )
+        },
+        {
+            FullName: employeeRec.Person,
+            Email: currentUser.Email,
+            Image: currentUser.Image,
+            Department: employeeRec.Department,
+            DepartmentCode: Coalesce(
+                LookUp(
+                    colDepartments,
+                    Department = employeeRec.Department,
+                    DepartmentCode
+                ),
+                "DEF"
+            ),
+            IsAdmin:employeeRec.isAdmin,
+            EmployeeCode: employeeRec.Employee_Code,
+            Status: employeeRec.'Status (cr7ba_status)',
+            LastSequence: Int(employeeRec.Last_Sequence),
+            showFeedBackSurvey: If(employeeRec.shouldAskFeedbackSurvey = 'shouldAskFeedbackSurvey (PNQ_Department_Employee_Tables)'.Yes, true, false)
+        }
+    )
+);
+Set(showFeedBackSurvey, false);
+//Set(showFeedBackSurvey, varUser.showFeedBackSurvey);
+Set(showFeedBackSurvey_BadResponse,false);
+ClearCollect(
+    colLatestComments,
+    AddColumns(
+        GroupBy(
+            Filter(
+                PNQ_Comments,
+                Department = varUser.Department
+            ),
+            DocNo,
+            Comments
+        ),
+        LatestComment,
+        First(
+            SortByColumns(
+                Comments,
+                "cr7ba_datetime",
+                SortOrder.Descending
+            )
+        )
+    )
+);
+Set(UserLastSequence, varUser.LastSequence);
+ClearCollect(colTabs, { TabID: GUID(), Mode:"Home", Label:"Home", DataRecord:Blank() });
+Set(varActiveTab, First(colTabs).TabID);
+Set(varSavedFilter_Assignee, "");
+Set(varDisabledColor, RGBA(70, 70, 70, 1));
+Set(showFilterSelectionBox, false);
+Set(varSearchClicked, false);
+Set(partNumberErrorMessage, "");
+
+Set(varLastClickTime, Blank());
+Set(varLastClickRecord, Blank());
+
+ClearCollect(colQueryData2, Distinct(PNQ_Backlogs, Originator));
+ClearCollect(
+    ACTypes,
+    Choices(PNQ_Backlogs.ACType)
+);
+/*
+ClearCollect(
+    ACTypes,
+    Filter(
+        Choices(PNQ_Backlogs.ACType),
+        Text(Value) <> "Global 7000" &&
+        Text(Value) <> "Amphibious"
+    )
+);
+*/
+ClearCollect(StatusOptions, Choices('Status (PNQ_Backlogs)'));
+ClearCollect(PriorityOptions, Filter(Choices('Priority (PNQ_Backlogs)'), Text(Value) <> "AOG 1"));
+ClearCollect(
+    colPriorityFilter,
+    { Value: "AOG" },
+    { Value: "Customer Quote" },
+    { Value: "Critical" },
+    { Value: "Routine" }
+);
+ClearCollect(ACModels, Distinct(PNQ_Backlogs, ACModel));
+
+ClearCollect(
+    PNQ_DB_ListSource,
+    AddColumns(
+        PNQ_Backlogs,
+        // Master search surface
+        SearchText,
+        Lower(
+            Coalesce(DocNo, "") & " " &
+            Coalesce(PartNumber, "") & " " &
+            Coalesce(NumberOfParts, "") & " " &
+            Coalesce(Customer, "") & " " &
+            Coalesce(Originator, "") & " "
+        )
+    )
+);
+ClearCollect(
+    PNQ_DB_ListAll,
+    AddColumns(
+        PNQ_Backlogs,
+        // Master search surface
+        SearchText,
+        Lower(
+            Coalesce(DocNo, "") & " " &
+            Coalesce(PartNumber, "") & " " &
+            Coalesce(NumberOfParts, "") & " " &
+            Coalesce(Customer, "") & " " &
+            Coalesce(Originator, "") & " "
+        )
+    )
+);
+ClearCollect(
+    PNQ_DB_ListAll_Filtered,
+    PNQ_DB_ListAll
+);
+
+ClearCollect(
+    colSLAMaster,
+
+    // AOG
+    {Priority:"AOG", Department:"CM", SLAHours:3},
+    {Priority:"AOG", Department:"PR", SLAHours:1.5},
+    {Priority:"AOG", Department:"ML", SLAHours:13},
+    {Priority:"AOG", Department:"CS", SLAHours:1.5},
+    {Priority:"AOG", Department:"CRI", SLAHours:1.5},
+    {Priority:"AOG", Department:"CRY", SLAHours:1.5},
+
+    // Critical
+    {Priority:"Critical", Department:"CM", SLAHours:3},
+    {Priority:"Critical", Department:"PR", SLAHours:6},
+    {Priority:"Critical", Department:"ML", SLAHours:48},
+    {Priority:"Critical", Department:"CS", SLAHours:6},
+    {Priority:"Critical", Department:"CRI", SLAHours:6},
+    {Priority:"Critical", Department:"CRY", SLAHours:6},
+
+    // Customer Quote
+    {Priority:"Customer Quote", Department:"CM", SLAHours:3},
+    {Priority:"Customer Quote", Department:"PR", SLAHours:6},
+    {Priority:"Customer Quote", Department:"ML", SLAHours:48},
+    {Priority:"Customer Quote", Department:"CS", SLAHours:6},
+    {Priority:"Customer Quote", Department:"CRI", SLAHours:6},
+    {Priority:"Customer Quote", Department:"CRY", SLAHours:6},
+
+    // Routine
+    {Priority:"Routine", Department:"CM", SLAHours:38},
+    {Priority:"Routine", Department:"PR", SLAHours:19},
+    {Priority:"Routine", Department:"ML", SLAHours:164},
+    {Priority:"Routine", Department:"CS", SLAHours:19},
+    {Priority:"Routine", Department:"CRI", SLAHours:19},
+    {Priority:"Routine", Department:"CRY", SLAHours:19}
+);
+
+// ── Seed filter options ──────────────────────────────────────────
+ClearCollect(colMasterFilterOptions, 
+{Key: "AssignedTo", Value:"By Person Assigned"}, {Key: "AssignedDept", Value:"By Assigned Department"}, {Key: "Originator", Value:"By Originator"},{Key: "ACModel", Value:"By Model"},{Key: "Customer", Value:"By Customer"},{Key: "PartNumber", Value:"By Part Number"},{Key: "OriginatorDept", Value:"By Originating Department"},{Key: "CreatedDate", Value:"By Date"},{Key: "Subject", Value:"By Subject"},{Key: "Priority", Value:"By Priority"});
+ClearCollect(colACModels,        {Value:"B737-800"},{Value:"B777-300ER"},{Value:"A320neo"},{Value:"B787-9"},{Value:"A350-900"},{Value:"B737 MAX 8"},{Value:"CRJ-900"});
+
+ClearCollect(
+    colPNQReturnReasons,
+    { Reason: "Aircraft completed/modified at a 3rd party completion center" },
+    { Reason: "BA engineering not Available" },
+    { Reason: "BAS site specific request" },
+    { Reason: "Certifying authority not available" },
+    { Reason: "Certifying authority provided is erroneous" },
+    { Reason: "CRJ Model" },
+    { Reason: "CSE provided p/n without supporting documentation" },
+    { Reason: "Drawing, specification or ARC confirmation not provided" },
+    { Reason: "Duplicate PNQ" },
+    { Reason: "Interface issue" },
+    { Reason: "Not CM roles and responsibilities" },
+    { Reason: "Part setup in BAS without any reference" },
+    { Reason: "Part setup in Production without any reference" },
+    { Reason: "PNQ is not assigned to CM" },
+    { Reason: "Reference not provided (for non Bombardier p/n)" },
+    { Reason: "Request to provide copy of dwg for Customer" },
+    { Reason: "Request to provide copy of dwg for Supplier" },
+    { Reason: "Returned - CM action not required" },
+    { Reason: "Technical Support provided p/n without supporting documentation" }
+);
+
+ClearCollect(colDepts, Distinct(PNQ_Department_Employee_Tables, Department));
+
+ClearCollect(
+    colSubjects,
+    {Key:"10.0 Review Planning Parameters for Warehouse Constraint Parts", Value:"Review Planning Parameters for Warehouse Constraint Parts"},
+    {Key:"10.1 Request to Remove Planning ParametersSupersession", Value:"Request to Remove Planning ParametersSupersession"},
+    {Key:"10.10 Propose Sales Approval Request", Value:"Propose Sales Approval Request"},
+    {Key:"10.2 Forecast for Customer Specific Request", Value:"Forecast for Customer Specific Request"},
+    {Key:"10.3 Review of parameters in preparation for Item Category Group Change", Value:"Review of parameters in preparation for Item Category Group Change"},
+    {Key:"10.4 Forecast for Business", Value:"Forecast for Business"},
+    {Key:"10.5 Forecast for Site Specific Part", Value:"Forecast for Site Specific Part"},
+    {Key:"10.6 Forecast for Maintenance Task Related Parts", Value:"Forecast for Maintenance Task Related Parts"},
+    {Key:"10.7 Forecast update for Shelf-Life part", Value:"Forecast update for Shelf-Life part"},
+    {Key:"10.8 Forecast for Supplier Specific Request", Value:"Forecast for Supplier Specific Request"},
+    {Key:"10.9 Excess & Inactive Inventory Request", Value:"Excess & Inactive Inventory Request"},
+    {Key:"12.0 MAG Certification", Value:"MAG Certification"},
+    {Key:"1.0 New Part Set-Up", Value:"New Part Set-Up"},
+    {Key:"1.01 ARC or Drawing Requirement", Value:"ARC or Drawing Requirement"},
+    {Key:"1.1 Service Bulletin Part Set-Up", Value:"Service Bulletin Part Set-Up"},
+    {Key:"1.3 Flight Simulator Part Set-Up", Value:"Flight Simulator Part Set-Up"},
+    {Key:"1.6 Batch Management", Value:"Batch Management"},
+    {Key:"1.7 Technical Query", Value:"Technical Query"},
+    {Key:"1.7.1 GSE Technical Query", Value:"GSE Technical Query"},
+    {Key:"2.0 Plant Level Extension", Value:"Plant Level Extension"},
+    {Key:"2.1 Class Characteristic Change", Value:"Class Characteristic Change"},
+    {Key:"2.2 Material Master Data Maintenance", Value:"Material Master Data Maintenance"},
+    {Key:"2.2.1 Valuation Type Maintenance", Value:"Valuation Type Maintenance"},
+    {Key:"2.3 Item Category Group Change", Value:"Item Category Group Change"},
+    {Key:"2.4 Time-Tracked, 9002", Value:"Time-Tracked, 9002"},
+    {Key:"3.0 Initial Provisioning query", Value:"Initial Provisioning query"},
+    {Key:"3.1 Initial Provisioning report", Value:"Initial Provisioning report"},
+    {Key:"3.2 IPC WB Query", Value:"IPC WB Query"},
+    {Key:"3.3 WB NPI", Value:"WB NPI"},
+    {Key:"3.4 NB NPI", Value:"NB NPI"},
+    {Key:"3.5 Customs Part Investigation", Value:"Customs Part Investigation"},
+    {Key:"4.0 Interchangeability Request", Value:"Interchangeability Request"},
+    {Key:"4.1 Engineering", Value:"Engineering"},
+    {Key:"4.2 SPP - Supersession-Substitution", Value:"SPP - Supersession-Substitution"},
+    {Key:"5.0 Price Non - AOG orders", Value:"Price Non - AOG orders"},
+    {Key:"5.0.1 Price WB AOG orders", Value:"Price WB AOG orders"},
+    {Key:"5.0.3 Price - Quote", Value:"Price - Quote"},
+    {Key:"5.3 Significant Cost Increase", Value:"Significant Cost Increase"},
+    {Key:"5.6 IP Price Request", Value:"IP Price Request"},
+    {Key:"5.7 MAUC Analysis", Value:"MAUC Analysis"},
+    {Key:"6.0 FAA - PMA Investigation", Value:"FAA - PMA Investigation"},
+    {Key:"6.1 OPMA Review", Value:"OPMA Review"},
+    {Key:"7.0 Price Value Investigation", Value:"Price Value Investigation"},
+    {Key:"8.0 Export Control & ITAR Compliance", Value:"Export Control & ITAR Compliance"},
+    {Key:"9.0 Dangerous Goods Maintenance", Value:"Dangerous Goods Maintenance"},
+    {Key:"9.1 SAP Project Data Cleansing", Value:"SAP Project Data Cleansing"},
+    {Key:"9.2 Virtual Plant 3042 Extension", Value:"Virtual Plant 3042 Extension"},
+    {Key:"9.5 IDOC", Value:"IDOC"},
+    {Key:"9.6 UOM", Value:"UOM"},
+    {Key:"9.8 Warranty", Value:"Warranty"},
+    {Key:"9.8.1 Warranty_HVNE Flag", Value:"Warranty_HVNE Flag"},
+    {Key:"9.9 Part Serialization", Value:"Part Serialization"},
+    {Key:"PS-MLA Master Data", Value:"PS-MLA Master Data"}
+);
+
+ClearCollect(
+    colCloseFailureReasons,
+    {Value: "Late response time"},
+    {Value: "Solution no more required"},
+    {Value: "Other reason"}
+);
+
+// ── Initialize home tab ──────────────────────────────────────────
+ClearCollect(colOpenTabs,
+  {TabID:"tab_home", TabLabel:"Home", TabType:"list", queryDetails: LookUp(PNQ_DB_ListSource, false), DocNo:"", IsCloseable:false}
+);
+
+// ── Initialize state variables ───────────────────────────────────
+Set(varActiveTabID,   "tab_home");
+Set(varActiveTabType, "list");
+Set(varActiveDocNo,   "");
+Set(varStatusFilter,  "All");
+Set(varPriorityFilter,"All");
+Set(varSearchText,    "");
+Set(varTabCounter,    1);
+Set(varShowSearchModal, false);
+Set(varShowFeedbackModal, false);
+Set(varSelectedFilter, "Originator");
+Set(showLoader, false);
+---------------------------- AFTER - CHANGE 1 -----------------------------
+Set(showLoader, true);
+Set(toggle_container_value, "dashboard");
+Set(commentsView, "chat");
+ClearCollect(
+    colFilters,
+{});
+ClearCollect(
+    colDepartments,
+    { Department: "Configuration Management", DepartmentCode: "CM" },
+    // { Department: "Forecasting", DepartmentCode: "FC" },
+    { Department: "Material Logistics", DepartmentCode: "ML" },
+    { Department: "CSR", DepartmentCode: "CS" },
+    { Department: "CSR-YUL", DepartmentCode: "CS" },
+    { Department: "CSR - YUL", DepartmentCode: "CS" },
+    { Department: "CSR - ICT", DepartmentCode: "CS" },
+    { Department: "CRC - YUL", DepartmentCode: "CRY" },
+    { Department: "CRC-ICT", DepartmentCode: "CRI" },
+    { Department: "Pricing Operations", DepartmentCode: "PR" }
+    //{ Department: "Others", DepartmentCode: "DEF" }
+);
+Set(
+    varUser,
+    With(
+        {
+            currentUser: User(),
+            employeeRec: LookUp(
+                PNQ_Department_Employee_Tables,
+                Lower(Employee_Email) = Lower(User().Email)
+            )
+        },
+        {
+            FullName: employeeRec.Person,
+            Email: currentUser.Email,
+            Image: currentUser.Image,
+            Department: employeeRec.Department,
+            DepartmentCode: Coalesce(
+                LookUp(
+                    colDepartments,
+                    Department = employeeRec.Department,
+                    DepartmentCode
+                ),
+                "DEF"
+            ),
+            IsAdmin:employeeRec.isAdmin,
+            EmployeeCode: employeeRec.Employee_Code,
+            Status: employeeRec.'Status (cr7ba_status)',
+            LastSequence: Int(employeeRec.Last_Sequence),
+            showFeedBackSurvey: If(employeeRec.shouldAskFeedbackSurvey = 'shouldAskFeedbackSurvey (PNQ_Department_Employee_Tables)'.Yes, true, false)
+        }
+    )
+);
+Set(showFeedBackSurvey, false);
+//Set(showFeedBackSurvey, varUser.showFeedBackSurvey);
+Set(showFeedBackSurvey_BadResponse,false);
+ClearCollect(
+    colLatestComments,
+    AddColumns(
+        GroupBy(
+            Filter(
+                PNQ_Comments,
+                Department = varUser.Department
+            ),
+            DocNo,
+            Comments
+        ),
+        LatestComment,
+        First(
+            SortByColumns(
+                Comments,
+                "cr7ba_datetime",
+                SortOrder.Descending
+            )
+        )
+    )
+);
+Set(UserLastSequence, varUser.LastSequence);
+ClearCollect(colTabs, { TabID: GUID(), Mode:"Home", Label:"Home", DataRecord:Blank() });
+Set(varActiveTab, First(colTabs).TabID);
+Set(varSavedFilter_Assignee, "");
+Set(varDisabledColor, RGBA(70, 70, 70, 1));
+Set(showFilterSelectionBox, false);
+Set(varSearchClicked, false);
+Set(partNumberErrorMessage, "");
+
+Set(varLastClickTime, Blank());
+Set(varLastClickRecord, Blank());
+
+ClearCollect(colQueryData2, Distinct(PNQ_Backlogs, Originator));
+ClearCollect(
+    ACTypes,
+    Choices(PNQ_Backlogs.ACType)
+);
+/*
+ClearCollect(
+    ACTypes,
+    Filter(
+        Choices(PNQ_Backlogs.ACType),
+        Text(Value) <> "Global 7000" &&
+        Text(Value) <> "Amphibious"
+    )
+);
+*/
+ClearCollect(StatusOptions, Choices('Status (PNQ_Backlogs)'));
+ClearCollect(PriorityOptions, Filter(Choices('Priority (PNQ_Backlogs)'), Text(Value) <> "AOG 1"));
+ClearCollect(
+    colPriorityFilter,
+    { Value: "AOG" },
+    { Value: "Customer Quote" },
+    { Value: "Critical" },
+    { Value: "Routine" }
+);
+ClearCollect(ACModels, Distinct(PNQ_Backlogs, ACModel));
+
+ClearCollect(
+    PNQ_DB_ListSource,
+    AddColumns(
+        PNQ_Backlogs,
+        // Master search surface
+        SearchText,
+        Lower(
+            Coalesce(DocNo, "") & " " &
+            Coalesce(PartNumber, "") & " " &
+            Coalesce(NumberOfParts, "") & " " &
+            Coalesce(Customer, "") & " " &
+            Coalesce(Originator, "") & " "
+        )
+    )
+);
+ClearCollect(
+    PNQ_DB_ListAll,
+    AddColumns(
+        PNQ_Backlogs,
+        // Master search surface
+        SearchText,
+        Lower(
+            Coalesce(DocNo, "") & " " &
+            Coalesce(PartNumber, "") & " " &
+            Coalesce(NumberOfParts, "") & " " &
+            Coalesce(Customer, "") & " " &
+            Coalesce(Originator, "") & " "
+        )
+    )
+);
+ClearCollect(
+    PNQ_DB_ListAll_Filtered,
+    PNQ_DB_ListAll
+);
+
+ClearCollect(
+    colSLAMaster,
+
+    // AOG
+    {Priority:"AOG", Department:"CM", SLAHours:3},
+    {Priority:"AOG", Department:"PR", SLAHours:1.5},
+    {Priority:"AOG", Department:"ML", SLAHours:13},
+    {Priority:"AOG", Department:"CS", SLAHours:1.5},
+    {Priority:"AOG", Department:"CRI", SLAHours:1.5},
+    {Priority:"AOG", Department:"CRY", SLAHours:1.5},
+
+    // Critical
+    {Priority:"Critical", Department:"CM", SLAHours:3},
+    {Priority:"Critical", Department:"PR", SLAHours:6},
+    {Priority:"Critical", Department:"ML", SLAHours:48},
+    {Priority:"Critical", Department:"CS", SLAHours:6},
+    {Priority:"Critical", Department:"CRI", SLAHours:6},
+    {Priority:"Critical", Department:"CRY", SLAHours:6},
+
+    // Customer Quote
+    {Priority:"Customer Quote", Department:"CM", SLAHours:3},
+    {Priority:"Customer Quote", Department:"PR", SLAHours:6},
+    {Priority:"Customer Quote", Department:"ML", SLAHours:48},
+    {Priority:"Customer Quote", Department:"CS", SLAHours:6},
+    {Priority:"Customer Quote", Department:"CRI", SLAHours:6},
+    {Priority:"Customer Quote", Department:"CRY", SLAHours:6},
+
+    // Routine
+    {Priority:"Routine", Department:"CM", SLAHours:38},
+    {Priority:"Routine", Department:"PR", SLAHours:19},
+    {Priority:"Routine", Department:"ML", SLAHours:164},
+    {Priority:"Routine", Department:"CS", SLAHours:19},
+    {Priority:"Routine", Department:"CRI", SLAHours:19},
+    {Priority:"Routine", Department:"CRY", SLAHours:19}
+);
+
+// ── Seed filter options ──────────────────────────────────────────
+ClearCollect(colMasterFilterOptions, 
+{Key: "AssignedTo", Value:"By Person Assigned"}, {Key: "AssignedDept", Value:"By Assigned Department"}, {Key: "Originator", Value:"By Originator"},{Key: "ACModel", Value:"By Model"},{Key: "Customer", Value:"By Customer"},{Key: "PartNumber", Value:"By Part Number"},{Key: "OriginatorDept", Value:"By Originating Department"},{Key: "CreatedDate", Value:"By Date"},{Key: "Subject", Value:"By Subject"},{Key: "Priority", Value:"By Priority"});
+ClearCollect(colACModels,        {Value:"B737-800"},{Value:"B777-300ER"},{Value:"A320neo"},{Value:"B787-9"},{Value:"A350-900"},{Value:"B737 MAX 8"},{Value:"CRJ-900"});
+
+ClearCollect(
+    colPNQReturnReasons,
+    { Reason: "Aircraft completed/modified at a 3rd party completion center" },
+    { Reason: "BA engineering not Available" },
+    { Reason: "BAS site specific request" },
+    { Reason: "Certifying authority not available" },
+    { Reason: "Certifying authority provided is erroneous" },
+    { Reason: "CRJ Model" },
+    { Reason: "CSE provided p/n without supporting documentation" },
+    { Reason: "Drawing, specification or ARC confirmation not provided" },
+    { Reason: "Duplicate PNQ" },
+    { Reason: "Interface issue" },
+    { Reason: "Not CM roles and responsibilities" },
+    { Reason: "Part setup in BAS without any reference" },
+    { Reason: "Part setup in Production without any reference" },
+    { Reason: "PNQ is not assigned to CM" },
+    { Reason: "Reference not provided (for non Bombardier p/n)" },
+    { Reason: "Request to provide copy of dwg for Customer" },
+    { Reason: "Request to provide copy of dwg for Supplier" },
+    { Reason: "Returned - CM action not required" },
+    { Reason: "Technical Support provided p/n without supporting documentation" }
+);
+
+ClearCollect(colDepts, Distinct(PNQ_Department_Employee_Tables, Department));
+
+ClearCollect(
+    colSubjects,
+    {Key:"10.0 Review Planning Parameters for Warehouse Constraint Parts", Value:"Review Planning Parameters for Warehouse Constraint Parts"},
+    {Key:"10.1 Request to Remove Planning ParametersSupersession", Value:"Request to Remove Planning ParametersSupersession"},
+    {Key:"10.10 Propose Sales Approval Request", Value:"Propose Sales Approval Request"},
+    {Key:"10.2 Forecast for Customer Specific Request", Value:"Forecast for Customer Specific Request"},
+    {Key:"10.3 Review of parameters in preparation for Item Category Group Change", Value:"Review of parameters in preparation for Item Category Group Change"},
+    {Key:"10.4 Forecast for Business", Value:"Forecast for Business"},
+    {Key:"10.5 Forecast for Site Specific Part", Value:"Forecast for Site Specific Part"},
+    {Key:"10.6 Forecast for Maintenance Task Related Parts", Value:"Forecast for Maintenance Task Related Parts"},
+    {Key:"10.7 Forecast update for Shelf-Life part", Value:"Forecast update for Shelf-Life part"},
+    {Key:"10.8 Forecast for Supplier Specific Request", Value:"Forecast for Supplier Specific Request"},
+    {Key:"10.9 Excess & Inactive Inventory Request", Value:"Excess & Inactive Inventory Request"},
+    {Key:"11.0 Material Logistic Master Data Alignment", Value:"Material Logistic Master Data Alignment"},
+    {Key:"12.0 MAG Certification", Value:"MAG Certification"},
+    {Key:"1.0 New Part Set-Up", Value:"New Part Set-Up"},
+    {Key:"1.01 ARC or Drawing Requirement", Value:"ARC or Drawing Requirement"},
+    {Key:"1.1 Service Bulletin Part Set-Up", Value:"Service Bulletin Part Set-Up"},
+    {Key:"1.3 Flight Simulator Part Set-Up", Value:"Flight Simulator Part Set-Up"},
+    {Key:"1.6 Batch Management", Value:"Batch Management"},
+    {Key:"1.7 Technical Query", Value:"Technical Query"},
+    {Key:"1.7.1 GSE Technical Query", Value:"GSE Technical Query"},
+    {Key:"2.0 Plant Level Extension", Value:"Plant Level Extension"},
+    {Key:"2.1 Class Characteristic Change", Value:"Class Characteristic Change"},
+    {Key:"2.2 Material Master Data Maintenance", Value:"Material Master Data Maintenance"},
+    {Key:"2.2.1 Valuation Type Maintenance", Value:"Valuation Type Maintenance"},
+    {Key:"2.3 Item Category Group Change", Value:"Item Category Group Change"},
+    {Key:"2.4 Time-Tracked, 9002", Value:"Time-Tracked, 9002"},
+    {Key:"3.0 Initial Provisioning query", Value:"Initial Provisioning query"},
+    {Key:"3.1 Initial Provisioning report", Value:"Initial Provisioning report"},
+    {Key:"3.2 IPC WB Query", Value:"IPC WB Query"},
+    {Key:"3.3 WB NPI", Value:"WB NPI"},
+    {Key:"3.4 NB NPI", Value:"NB NPI"},
+    {Key:"3.5 Customs Part Investigation", Value:"Customs Part Investigation"},
+    {Key:"4.0 Interchangeability Request", Value:"Interchangeability Request"},
+    {Key:"4.1 Engineering", Value:"Engineering"},
+    {Key:"4.2 SPP - Supersession-Substitution", Value:"SPP - Supersession-Substitution"},
+    {Key:"5.0 Price Non - AOG orders", Value:"Price Non - AOG orders"},
+    {Key:"5.0.1 Price WB AOG orders", Value:"Price WB AOG orders"},
+    {Key:"5.0.3 Price - Quote", Value:"Price - Quote"},
+    {Key:"5.3 Significant Cost Increase", Value:"Significant Cost Increase"},
+    {Key:"5.6 IP Price Request", Value:"IP Price Request"},
+    {Key:"5.7 MAUC Analysis", Value:"MAUC Analysis"},
+    {Key:"6.0 FAA - PMA Investigation", Value:"FAA - PMA Investigation"},
+    {Key:"6.1 OPMA Review", Value:"OPMA Review"},
+    {Key:"7.0 Price Value Investigation", Value:"Price Value Investigation"},
+    {Key:"8.0 Export Control & ITAR Compliance", Value:"Export Control & ITAR Compliance"},
+    {Key:"9.0 Dangerous Goods Maintenance", Value:"Dangerous Goods Maintenance"},
+    {Key:"9.1 SAP Project Data Cleansing", Value:"SAP Project Data Cleansing"},
+    {Key:"9.2 Virtual Plant 3042 Extension", Value:"Virtual Plant 3042 Extension"},
+    {Key:"9.5 IDOC", Value:"IDOC"},
+    {Key:"9.6 UOM", Value:"UOM"},
+    {Key:"9.8 Warranty", Value:"Warranty"},
+    {Key:"9.8.1 Warranty_HVNE Flag", Value:"Warranty_HVNE Flag"},
+    {Key:"9.9 Part Serialization", Value:"Part Serialization"},
+    {Key:"PS-MLA Master Data", Value:"PS-MLA Master Data"}
+);
+
+ClearCollect(
+    colCloseFailureReasons,
+    {Value: "Late response time"},
+    {Value: "Solution no more required"},
+    {Value: "Other reason"}
+);
+
+// ── Initialize home tab ──────────────────────────────────────────
+ClearCollect(colOpenTabs,
+  {TabID:"tab_home", TabLabel:"Home", TabType:"list", queryDetails: LookUp(PNQ_DB_ListSource, false), DocNo:"", IsCloseable:false}
+);
+
+// ── Initialize state variables ───────────────────────────────────
+Set(varActiveTabID,   "tab_home");
+Set(varActiveTabType, "list");
+Set(varActiveDocNo,   "");
+Set(varStatusFilter,  "All");
+Set(varPriorityFilter,"All");
+Set(varSearchText,    "");
+Set(varTabCounter,    1);
+Set(varShowSearchModal, false);
+Set(varShowFeedbackModal, false);
+Set(varSelectedFilter, "Originator");
+Set(showLoader, false);
+---------------------------- END OF AFTER ----------------------------------
+
+==================== CHANGE 2 ====================
+STEP 1: Screen: PartsQuerySystem
+STEP 2: Tree view: PartsQuerySystem > New Query Form Container > newQueryMainContainer >
+        Container 3 > pnqSubject
+STEP 3: Property dropdown (top left, next to fx): OnChange
+STEP 4: Click in the formula bar, Ctrl+A, paste the AFTER code below.
+        (Only one line differs: under "// Material Master",
+            "11.0", "PS-MLA Master Data",
+        becomes
+            "11.0 Material Logistic Master Data Alignment", Blank(),  )
+STEP 5: Do NOT touch Items, Allow searching, DisplayFields, SearchFields or the Fields panel.
+What this changes: removes the unused "11.0" line and maps the new subject to no department.
+---------------------------- BEFORE - CHANGE 2 ----------------------------
+Set(
+    varAssignedDept,
+    Switch(
+        Self.Selected.Key,
+
+        // Forecasting
+        "10.0 Review Planning Parameters for Warehouse Constraint Parts", "Forecasting",
+        "10.1 Request to Remove Planning ParametersSupersession", "Forecasting",
+        "10.2 Forecast for Customer Specific Request", "Forecasting",
+        "10.3 Review of parameters in preparation for Item Category Group Change", "Forecasting",
+        "10.4 Forecast for Business", "Forecasting",
+        "10.5 Forecast for Site Specific Part", "Forecasting",
+        "10.6 Forecast for Maintenance Task Related Parts", "Forecasting",
+        "10.7 Forecast update for Shelf-Life part", "Forecasting",
+        "10.8 Forecast for Supplier Specific Request", "Forecasting",
+        "10.9 Excess & Inactive Inventory Request", "Forecasting",
+        "10.10 Propose Sales Approval Request", "Forecasting",
+
+        // Material Master
+        "11.0", "PS-MLA Master Data",
+
+        // Blank
+        "12.0 MAG Certification", Blank(),
+        "1.01 ARC or Drawing Requirement", Blank(),
+        "1.6 Batch Management", Blank(),
+        "3.2 IPC WB Query", Blank(),
+        "3.5 Customs Part Investigation", Blank(),
+        "4.1 Engineering", Blank(),
+
+        // Configuration Management
+        "1.0 New Part Set-Up", "Configuration Management",
+        "1.1 Service Bulletin Part Set-Up", "Configuration Management",
+        "1.3 Flight Simulator Part Set-Up", "Configuration Management",
+        "1.7 Technical Query", "Configuration Management",
+        "1.7.1 GSE Technical Query", "Configuration Management",
+
+        "2.0 Plant Level Extension", "Configuration Management",
+        "2.1 Class Characteristic Change", "Configuration Management",
+        "2.2 Material Master Data Maintenance", "Configuration Management",
+        "2.2.1 Valuation Type Maintenance", "Configuration Management",
+        "2.3 Item Category Group Change", "Configuration Management",
+        "2.4 Time-Tracked, 9002", "Configuration Management",
+
+        "3.3 WB NPI", "Configuration Management",
+        "3.4 NB NPI", "Configuration Management",
+
+        "4.0 Interchangeability Request", "Configuration Management",
+        "4.2 SPP - Supersession-Substitution", "Configuration Management",
+
+        "9.0 Dangerous Goods Maintenance", "Configuration Management",
+        "9.1 SAP Project Data Cleansing", "Configuration Management",
+        "9.2 Virtual Plant 3042 Extension", "Configuration Management",
+        "9.6 UOM", "Configuration Management",
+        "9.9 Part Serialization", "Configuration Management",
+
+        // Sales
+        "3.0 Initial Provisioning query", "Sales-Spares",
+        "3.1 Initial Provisioning report", "Sales-Spares",
+
+        // Pricing mappings
+        "5.0.1 Price WB AOG orders", "CRC - YUL",
+        "5.0 Price Non - AOG orders", "CRC - YUL",
+        "5.0.3 Price - Quote", "PS - MLA Master data",
+        "5.3 Significant Cost Increase", "Pricing Operations",
+        "5.6 IP Price Request", "PS - MLA Master data",
+        "5.7 MAUC Analysis", "Finance",
+
+        // Material Logistics
+        "6.0 FAA - PMA Investigation", "Material Logistics",
+
+        // OPMA
+        "6.1 OPMA Review", "OPMA Outisde - Offload - In House Make",
+
+        // Pricing Operations mapping
+        "7.0 Price Value Investigation", "Pricing Operations",
+
+        // Chicago Distribution
+        "8.0 Export Control & ITAR Compliance", "Distribution - Chicago",
+
+        // Warranty
+        "9.8 Warranty", "Warranty",
+        "9.8.1 Warranty_HVNE Flag", "Warranty",
+
+        Blank()
+    )
+);
+With(
+    {
+        _tab: LookUp(colOpenTabs, TabID = varActiveTabID),
+        _oldValue: Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.Subject),
+        _newValue: Text(Self.Selected.Key)
+    },
+    If(
+        _oldValue <> _newValue,
+
+        // ✅ UPSERT (update if exists, else insert)
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                tempQueryDetails: Patch(
+                    _tab.tempQueryDetails,
+                    {
+                        Subject: Self.Selected.Value,
+                        cr7ba_assigneddepartment: varAssignedDept
+                    }
+                ),
+                fieldsUpdated:
+                    With(
+                        {
+                            _existing:
+                                Filter(_tab.fieldsUpdated, FieldName <> "Subject")
+                        },
+                        Collect(
+                            _existing,
+                            {
+                                FieldName: "Subject",
+                                OldValue: _oldValue,
+                                NewValue: _newValue,
+                                Reason: LookUp(_tab.fieldsUpdated, FieldName="Subject").Reason
+                            }
+                        )
+                    )
+            }
+        ),
+
+        // ✅ REMOVE if reverted back to original
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                tempQueryDetails: Patch(
+                    _tab.tempQueryDetails,
+                    {
+                        Subject: Self.Selected.Value
+                    }
+                ),
+                fieldsUpdated:
+                    Filter(_tab.fieldsUpdated, FieldName <> "Subject")
+            }
+        )
+    )
+);
+---------------------------- AFTER - CHANGE 2 -----------------------------
+Set(
+    varAssignedDept,
+    Switch(
+        Self.Selected.Key,
+
+        // Forecasting
+        "10.0 Review Planning Parameters for Warehouse Constraint Parts", "Forecasting",
+        "10.1 Request to Remove Planning ParametersSupersession", "Forecasting",
+        "10.2 Forecast for Customer Specific Request", "Forecasting",
+        "10.3 Review of parameters in preparation for Item Category Group Change", "Forecasting",
+        "10.4 Forecast for Business", "Forecasting",
+        "10.5 Forecast for Site Specific Part", "Forecasting",
+        "10.6 Forecast for Maintenance Task Related Parts", "Forecasting",
+        "10.7 Forecast update for Shelf-Life part", "Forecasting",
+        "10.8 Forecast for Supplier Specific Request", "Forecasting",
+        "10.9 Excess & Inactive Inventory Request", "Forecasting",
+        "10.10 Propose Sales Approval Request", "Forecasting",
+
+        // Material Master
+        "11.0 Material Logistic Master Data Alignment", Blank(),
+
+        // Blank
+        "12.0 MAG Certification", Blank(),
+        "1.01 ARC or Drawing Requirement", Blank(),
+        "1.6 Batch Management", Blank(),
+        "3.2 IPC WB Query", Blank(),
+        "3.5 Customs Part Investigation", Blank(),
+        "4.1 Engineering", Blank(),
+
+        // Configuration Management
+        "1.0 New Part Set-Up", "Configuration Management",
+        "1.1 Service Bulletin Part Set-Up", "Configuration Management",
+        "1.3 Flight Simulator Part Set-Up", "Configuration Management",
+        "1.7 Technical Query", "Configuration Management",
+        "1.7.1 GSE Technical Query", "Configuration Management",
+
+        "2.0 Plant Level Extension", "Configuration Management",
+        "2.1 Class Characteristic Change", "Configuration Management",
+        "2.2 Material Master Data Maintenance", "Configuration Management",
+        "2.2.1 Valuation Type Maintenance", "Configuration Management",
+        "2.3 Item Category Group Change", "Configuration Management",
+        "2.4 Time-Tracked, 9002", "Configuration Management",
+
+        "3.3 WB NPI", "Configuration Management",
+        "3.4 NB NPI", "Configuration Management",
+
+        "4.0 Interchangeability Request", "Configuration Management",
+        "4.2 SPP - Supersession-Substitution", "Configuration Management",
+
+        "9.0 Dangerous Goods Maintenance", "Configuration Management",
+        "9.1 SAP Project Data Cleansing", "Configuration Management",
+        "9.2 Virtual Plant 3042 Extension", "Configuration Management",
+        "9.6 UOM", "Configuration Management",
+        "9.9 Part Serialization", "Configuration Management",
+
+        // Sales
+        "3.0 Initial Provisioning query", "Sales-Spares",
+        "3.1 Initial Provisioning report", "Sales-Spares",
+
+        // Pricing mappings
+        "5.0.1 Price WB AOG orders", "CRC - YUL",
+        "5.0 Price Non - AOG orders", "CRC - YUL",
+        "5.0.3 Price - Quote", "PS - MLA Master data",
+        "5.3 Significant Cost Increase", "Pricing Operations",
+        "5.6 IP Price Request", "PS - MLA Master data",
+        "5.7 MAUC Analysis", "Finance",
+
+        // Material Logistics
+        "6.0 FAA - PMA Investigation", "Material Logistics",
+
+        // OPMA
+        "6.1 OPMA Review", "OPMA Outisde - Offload - In House Make",
+
+        // Pricing Operations mapping
+        "7.0 Price Value Investigation", "Pricing Operations",
+
+        // Chicago Distribution
+        "8.0 Export Control & ITAR Compliance", "Distribution - Chicago",
+
+        // Warranty
+        "9.8 Warranty", "Warranty",
+        "9.8.1 Warranty_HVNE Flag", "Warranty",
+
+        Blank()
+    )
+);
+With(
+    {
+        _tab: LookUp(colOpenTabs, TabID = varActiveTabID),
+        _oldValue: Text(LookUp(colOpenTabs, TabID = varActiveTabID).queryDetails.Subject),
+        _newValue: Text(Self.Selected.Key)
+    },
+    If(
+        _oldValue <> _newValue,
+
+        // ✅ UPSERT (update if exists, else insert)
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                tempQueryDetails: Patch(
+                    _tab.tempQueryDetails,
+                    {
+                        Subject: Self.Selected.Value,
+                        cr7ba_assigneddepartment: varAssignedDept
+                    }
+                ),
+                fieldsUpdated:
+                    With(
+                        {
+                            _existing:
+                                Filter(_tab.fieldsUpdated, FieldName <> "Subject")
+                        },
+                        Collect(
+                            _existing,
+                            {
+                                FieldName: "Subject",
+                                OldValue: _oldValue,
+                                NewValue: _newValue,
+                                Reason: LookUp(_tab.fieldsUpdated, FieldName="Subject").Reason
+                            }
+                        )
+                    )
+            }
+        ),
+
+        // ✅ REMOVE if reverted back to original
+        Patch(
+            colOpenTabs,
+            _tab,
+            {
+                tempQueryDetails: Patch(
+                    _tab.tempQueryDetails,
+                    {
+                        Subject: Self.Selected.Value
+                    }
+                ),
+                fieldsUpdated:
+                    Filter(_tab.fieldsUpdated, FieldName <> "Subject")
+            }
+        )
+    )
+);
+---------------------------- END OF AFTER ----------------------------------
+
+HOW TO UNDO
+- Exact undo: make.powerapps.com > the dev app > Details > Versions > Restore the version saved
+  just before this record (after record 07).
+- Otherwise: paste BEFORE - CHANGE 1 back into App > OnStart (then Run OnStart), and BEFORE - CHANGE 2 back
+  into pnqSubject > OnChange. Undo both together.
+- Queries already saved with the new subject keep it in Dataverse; after an undo their Subject
+  box would show empty (same situation record 07 avoids for PS-MLA). So undo only before
+  publishing, or tell Nofil first.
+
+TESTING (in dev)
+NOT TESTED YET.
+1.  Studio: Run OnStart: no error. F5 > New Request > Subject: "Material Logistic Master Data
+    Alignment" is in the list, without a number, between "Excess & Inactive Inventory Request"
+    and "MAG Certification". Typing "Material Logistic" finds it. Typing "11.0" finds nothing.
+2.  Pick it: Assigned Department stays empty (as for MAG Certification). Pick a department, fill
+    the required fields, Save. Open the query: Subject shows "Material Logistic Master Data
+    Alignment".
+3.  Edit that query, change something else, Save: no "Please select Subject" error, subject kept.
+4.  Pick another subject (e.g. "New Part Set-Up"): its department still fills in as before.
+5.  Record 07 still works: PS-MLA not offered on New Request; an old PS-MLA query still shows it.
+6.  Home list "By Subject": after saving a query with the new subject, it appears there.
+7.  New Request with more than 1 part (group): pick the new subject, save, every part has it.
+8.  Export check ("no other behaviour changes"): run
+      python -I _changes/compare_export.py _extracted/iQuery_Dev_20_Nov/msapp _extracted/<new export>/msapp
+    Pass = exactly 4 changed properties in the whole app: App.OnStart and pnqSubject.OnChange
+    (this record), pnqSubject.Items and pnqSubject.SearchItems (record 07). The printed OnStart and
+    OnChange differences must be exactly the two lines above.
+9.  New Request: pick "New Part Set-Up" (Configuration Management fills in), then the new
+    subject: department and Assigned To are emptied, the department box can be edited, and Save
+    without a department shows "Please select an Assigned Department".
+10. Existing query (e.g. Configuration Management): change the subject to the new one: department
+    is emptied; pick it again; Save (a reason/comment may be asked); history shows old Key ->
+    new Key.
+11. Same query: new subject, then back to the original subject: check the department (known
+    issue from before: it is not put back automatically).
+12. Export flow (Export-iQuery-ReportData): the file shows "11.0 Material Logistic Master Data
+    Alignment" for a query saved with it.
+13. Two users: user B opens iQuery, then this version is published, then user A saves a query with
+    the new subject. B (without refreshing) opens it: Subject is empty. After B refreshes: shown.
+
+REVIEW (independent, 2026-11-26): READY WITH NOTES
+- BEFORE blocks match the export (Controls json) exactly; each AFTER differs by exactly one line;
+  no leading "="; non-ASCII characters only inside comments; "&" only inside strings.
+- Key fits the pattern (44 chars; longest existing 71; Subject column Text, max 4000); "11.0"
+  clashes with nothing; nothing in the app or the 3 flows reads the number.
+- Department behaves exactly like "12.0 MAG Certification" (cleared; Save requires one).
+- No other code depends on subject names; record 07 unaffected (new subject listed, no number,
+  found by "Material Logistic", not by "11.0").
+- Notes applied: one-line insert instead of a full OnStart paste, exact undo, user refresh after
+  publishing, tests 9-13, record 07 count 53, outside reports not checked.
