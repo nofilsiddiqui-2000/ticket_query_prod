@@ -68,6 +68,8 @@ STEP 3: Do NOT replace the whole OnStart. In the formula bar, find this line:
         The next line must still be {Key:"12.0 MAG Certification", ...}. The full AFTER below is
         for reference and undo only (it is exactly the BEFORE plus this one line).
 STEP 4: Tree view: click the "..." next to App > Run OnStart. Check there is no red error.
+        REQUIRED: editing OnStart does not re-run it in Studio, so the new subject only appears
+        after Run OnStart (in the published app: after publishing and reopening the app).
 What this changes: adds the new subject to the Subject list.
 ---------------------------- BEFORE - CHANGE 1 ----------------------------
 Set(showLoader, true);
@@ -976,7 +978,8 @@ HOW TO UNDO
   publishing, or tell Nofil first.
 
 TESTING (in dev)
-NOT TESTED YET.
+2026-11-26, Nofil: both changes pasted. The new subject did not show until Run OnStart was
+done in Studio; after Run OnStart it shows in the Subject dropdown. Other tests NOT DONE YET.
 1.  Studio: Run OnStart: no error. F5 > New Request > Subject: "Material Logistic Master Data
     Alignment" is in the list, without a number, between "Excess & Inactive Inventory Request"
     and "MAG Certification". Typing "Material Logistic" finds it. Typing "11.0" finds nothing.
