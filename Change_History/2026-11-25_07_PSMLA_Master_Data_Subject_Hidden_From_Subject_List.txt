@@ -75,9 +75,18 @@ Filter(
 ==================== CHANGE 2 ====================
 STEP 1: Same control: pnqSubject (selected in the Tree view).
 STEP 2: Properties panel (right side): turn "Allow searching" OFF, then ON again.
-STEP 3: Properties panel > Fields > Edit: Primary text = Value, Search field = Value.
+STEP 3: Property dropdown: DisplayFields. Ctrl+A, paste:  ["Value"]
+STEP 4: Property dropdown: SearchFields. Ctrl+A, paste:   ["Value"]
 What this changes: makes Studio rebuild the hidden SearchItems property from the new Items, so the
-dropdown (and typing in it) uses the filtered list.
+dropdown (and typing in it) uses the filtered list. STEPS 3-4 put the box's display back to what
+it was: changing Items / Allow searching makes Studio reset DisplayFields and SearchFields to the
+first column (Key), and the list then shows the numbered keys ("1.0 New Part Set-Up").
+2026-11-26 (Nofil, in dev): after CHANGE 1 + the first version of this step (Fields panel), the
+list showed the numbered keys. Fixed with STEPS 3-4 above. DisplayFields and SearchFields must be
+exactly ["Value"], as before this record.
+---------------------------- BEFORE = AFTER - DisplayFields / SearchFields -
+["Value"]
+---------------------------- END OF AFTER ----------------------------------
 ---------------------------- BEFORE - CHANGE 2 (hidden SearchItems) -------
 Search(colSubjects,pnqSubject.SearchText,Value)
 ---------------------------- AFTER - CHANGE 2 (expected, made by Studio) --
@@ -107,7 +116,11 @@ Test cases:
    offered.
 6. Existing query with another subject: Edit Form, open Subject: PS-MLA not offered.
 7. Switch between a PS-MLA query tab and a New Request tab: each shows the right list.
-8. Export the app after saving: Controls/*.json pnqSubject SearchItems must wrap the new Filter.
+8. Export the app after saving: Controls/*.json pnqSubject SearchItems must wrap the new Filter,
+   and EVERY other pnqSubject property must be the same as in iQuery_26_Nov (compared by script;
+   only Items and SearchItems may differ).
+1b. The list shows the subject names WITHOUT numbers ("New Part Set-Up", not
+   "1.0 New Part Set-Up"), as before. A selected subject also shows without the number.
 
 REVIEW (independent whole-app review of version 3, 2026-11-26): SAFE WITH NOTES
 Checked from Controls/*.json (all pnqSubject properties) and the whole app.
