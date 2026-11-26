@@ -8,18 +8,18 @@ Dates are the app's "last saved" time (Header.json, UTC), not the upload date.
 
 ## Current version (repo root)
 
-- `iQuery.msapp` (v1.55.4): last saved 2026-11-25 18:25 UTC (uploaded 2026-11-25 15:15 EST).
-  Base for the next work. Includes Change_History 01-07. Compared by script with
-  `iQuery_Dev_20_Nov.msapp` (2026-11-25): the only code difference is pnqSubject.Items, which
-  matches record 07's AFTER exactly. Other differences: the app description (v1.55.3 -> v1.55.4)
-  and a new app Id (every .msapp download so far has had a new Id).
-  Note: a .msapp has no Microsoft.Flow folder. The flows are unchanged since
-  `iQuery_Dev_154_5_20261116034138.zip` - use that package for the flow definitions.
+- `iQuery_26_Nov_20261126154018.zip` (export package, v1.55.3, app Id 91ca5a81, same Id as
+  `iQuery_Dev_20_Nov.msapp`): last saved 2026-11-25 18:15 UTC (appVersion 2026-11-25T18:15:56Z),
+  exported 2026-11-26 15:40 UTC. Base for the next work. Includes Change_History 01-07: every
+  Src/*.pa.yaml file is identical to `iQuery.msapp` (checked by script 2026-11-26). Holds the
+  flow definitions (Microsoft.Flow: iQuery-Request_Access_Email, iQuery-Submit_Feedback,
+  Export-iQuery-ReportData).
 
 ## Archived
 
 | File | App version | Last saved (UTC) | Notes |
 |---|---|---|---|
+| `iQuery.msapp` | v1.55.4 | 2026-11-25 18:25 | Records 01-07. Only code difference from `iQuery_Dev_20_Nov.msapp`: pnqSubject.Items = record 07 AFTER (exact). App Id 12afa482 (different from the 26 Nov package, which has 91ca5a81). Same code as `iQuery_26_Nov_20261126154018.zip`. |
 | `iQuery_Dev_20_Nov.msapp` | v1.55.3 | 2026-11-20 16:53 | Records 01-06. Same code as `iQuery_16_Nov_v2.msapp` (every Src/*.pa.yaml identical, checked 2026-11-20); only the description, app Id, control IDs, data source metadata and image region (weu instead of neu) differ. Base for Change_History 07. |
 | `iQuery_16_Nov_v2.msapp` | v1.55 | 2026-11-16 17:43 | Records 01-06. All 7 record 06 AFTER blocks match it exactly (checked by script 2026-11-16); those 7 OnSelect formulas are the only difference from `iQuery_16_Nov.msapp`. Published to the TEST environment on 2026-11-16. Same code as `iQuery_Dev_20_Nov.msapp`. |
 | `iQuery_16_Nov.msapp` | v1.54.5 | 2026-11-16 16:13 | Records 01-05 (05 = corrected read-back, pasted and saved). Only HiddenSaveButton.OnSelect differs from `iQuery_Dev_154_5`. Base for Change_History 06. |
